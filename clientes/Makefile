@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread 
+CFLAGS=-Wall -Werror -g -pthread -lncurses
 
 PROGS=raider guardian
 
