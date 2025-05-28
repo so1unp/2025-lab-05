@@ -64,8 +64,11 @@ dkms.conf
 *.zip
 
 # Binarios de los ejercicios
-bin/*
-!bin/.keep
+catacumbas/server
+directorio/server
+clientes/raider
+clientes/guardian
+ejemplos/ncurses-pong
 
 # other stuff
 .ccls-cache
