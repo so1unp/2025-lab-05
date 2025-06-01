@@ -1,14 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 
-const int MAX_JUGADORES = 10;
-const int MAX_GUARDIANES = MAX_JUGADORES / 2;
-const int MAX_EXPLORADORES = MAX_JUGADORES - MAX_GUARDIANES;
-const int MAX_TESOROS = 10;
-const int HEIGHT = 25;
-const int WIDTH = 80;
+#define MAX_JUGADORES 10
+#define MAX_GUARDIANES MAX_JUGADORES / 2
+#define MAX_EXPLORADORES MAX_JUGADORES - MAX_GUARDIANES
+#define MAX_TESOROS 10
+#define HEIGHT 25
+#define WIDTH 80
+
+int px = 1, py = 1;
 
 
 void genTreasure(); // generar tesoro.
@@ -51,16 +54,22 @@ struct Mensaje {
 int main(int argc, char* argv[])
 {
     printf("Catacumba\n");
-
+    
     exit(EXIT_SUCCESS);
 }
 
-void genTreasure() {
-    // x aleatoria
-    // y aleatoria 
-    // pos[x,y]
-    // tesoro <- pos
-    // arena <- tesoro
+// void genTreasure(struct Tesoro *tesoros) {
+void genTreasure(struct Arena *arena) { 
+    int tx, ty, i;
+    for (i = 0; i < MAX_TESOROS; i++) {
+        tx = 1 + rand() % (WIDTH-1); // x <- de 1 a 79 ?
+        ty = 1 + rand() % (HEIGHT-1); // y <- de 1 a 24 ?
+
+        arena->tesoros[i].columna = tx;
+        arena->tesoros[i].fila = ty;
+        arena->tesoros[i].local_id = i;
+    }
+    // probar que funcione
 }
 
 void receiveAction() {
@@ -75,6 +84,7 @@ void sendSomething() {
 
 void designMap() {
     // definir una base
+    // avisar al directorio
 }
 
 void eraseMap() {
