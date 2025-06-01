@@ -4,24 +4,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
-
-// Estas definiciones deben coincidir con las del servidor
-#define MAILBOX_KEY 12345
-#define MAX_TEXT 100
-
-// Definición de la estructura del mensaje
-struct mensaje
-{
-    long mtype;      // Tipo de mensaje (requerido por msgsnd)
-    int tipo;        // Tipo de operación
-    char texto[100]; // Contenido del mensaje
-};
-
-// Códigos de operación
-#define OP_LISTAR 1
-#define OP_AGREGAR 2
-#define OP_BUSCAR 3
-#define OP_ELIMINAR 4
+#include "directorio.h"
 
 void mostrar_menu()
 {
@@ -37,7 +20,7 @@ void mostrar_menu()
 int main()
 {
     int mailbox_id;
-    struct mensaje msg;
+    struct solicitud msg;
     int opcion;
     char buffer[150];
 
@@ -74,7 +57,7 @@ int main()
         }
 
         // Común para todos los mensajes
-        msg.mtype = 1; // Tipo de mensaje para msgrcv
+        msg.mtype = 1; // Tipo de solicitud para msgrcv
 
         switch (opcion)
         {
@@ -84,7 +67,7 @@ int main()
 
             if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
-                perror("Error al enviar mensaje");
+                perror("Error al enviar solicitud");
             }
             else
             {
@@ -99,7 +82,7 @@ int main()
             fgets(buffer, sizeof(buffer), stdin);
             buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar el salto de línea
 
-            // Copiar el nombre al mensaje
+            // Copiar el nombre al solicitud
             strncpy(msg.texto, buffer, MAX_TEXT - 1);
 
             printf("Ingrese dirección de la catacumba: ");
@@ -112,7 +95,7 @@ int main()
 
             if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
-                perror("Error al enviar mensaje");
+                perror("Error al enviar solicitud");
             }
             else
             {
@@ -131,7 +114,7 @@ int main()
 
             if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
-                perror("Error al enviar mensaje");
+                perror("Error al enviar solicitud");
             }
             else
             {
@@ -150,7 +133,7 @@ int main()
 
             if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
-                perror("Error al enviar mensaje");
+                perror("Error al enviar solicitud");
             }
             else
             {

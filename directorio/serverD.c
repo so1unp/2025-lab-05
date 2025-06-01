@@ -5,31 +5,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <string.h>
-
-#define MAX_CATACUMBAS 100
-#define MAILBOX_KEY 12345 // Clave constante para el mailbox
-#define MAX_RUTA 200
-
-// Definición de la estructura de catacumba
-struct catacumba
-{
-    char nombre[100];
-    char direccion[MAX_RUTA]; // Ruta al archivo de memoria compartida
-};
-
-// Definición de la estructura del mensaje a recibir
-struct mensaje
-{
-    long mtype; // Tipo de mensaje (requerido por msgrcv)
-    int tipo;   // Tipo de operación
-    char texto[100];
-};
-
-// Códigos de operación
-#define OP_LISTAR 1
-#define OP_AGREGAR 2
-#define OP_BUSCAR 3
-#define OP_ELIMINAR 4
+#include "directorio.h"
 
 int main(int argc, char *argv[])
 {
@@ -37,7 +13,7 @@ int main(int argc, char *argv[])
     int num_catacumbas = 0;
 
     int mailbox_id;
-    struct mensaje msg;
+    struct solicitud msg;
     int recibido;
 
     printf("Directorio de Catacumbas iniciando...\n");
@@ -57,17 +33,17 @@ int main(int argc, char *argv[])
     {
         printf("Esperando mensajes...\n");
 
-        // Recibir mensaje (bloqueante)
+        // Recibir solicitud (bloqueante)
         recibido = msgrcv(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0, 0);
         if (recibido == -1)
         {
-            perror("Error al recibir mensaje");
+            perror("Error al recibir solicitud");
             continue;
         }
 
         printf("Mensaje recibido. Tipo: %d, Texto: %s\n", msg.tipo, msg.texto);
 
-        // Procesar mensaje según el tipo
+        // Procesar solicitud según el tipo
         switch (msg.tipo)
         {
         case OP_LISTAR:
