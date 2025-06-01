@@ -162,6 +162,8 @@ int main()
         else
         {
             printf("Respuesta recibida - Código: %d\n", resp.codigo);
+            printf("Tamaño real de mensaje a enviar: %lu bytes\n", sizeof(resp));
+            
             printf("Datos: %s\n", resp.datos);
             if (resp.num_elementos > 0)
             {

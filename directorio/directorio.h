@@ -31,7 +31,7 @@
 #define MAX_TEXT 100
 
 /** @brief Longitud máxima para los datos de una respuesta */
-#define MAX_DAT_RESP 99999
+#define MAX_DAT_RESP 4096
 
 // ==================== CÓDIGOS DE OPERACIÓN ====================
 // Estos códigos identifican qué operación quiere realizar el cliente
