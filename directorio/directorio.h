@@ -25,13 +25,13 @@
 #define MAILBOX_RESPUESTA_KEY 12346
 
 /** @brief Longitud máxima para la ruta de una catacumba */
-#define MAX_RUTA 200
+#define MAX_RUTA 100
 
 /** @brief Longitud máxima para el texto de un mensaje */
 #define MAX_TEXT 100
 
 /** @brief Longitud máxima para los datos de una respuesta */
-#define MAX_DAT_RESP 256
+#define MAX_DAT_RESP 99999
 
 // ==================== CÓDIGOS DE OPERACIÓN ====================
 // Estos códigos identifican qué operación quiere realizar el cliente
@@ -85,7 +85,7 @@ struct catacumba
  */
 struct solicitud
 {
-    long mtype;           /**< Tipo de mensaje (requerido por las funciones msgrcv/msgsnd) */
+    long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
     int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
     char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
 };
@@ -98,7 +98,7 @@ struct solicitud
  */
 struct respuesta
 {
-    long mtype;               /**< Tipo de mensaje (requerido por las funciones msgrcv/msgsnd) */
+    long mtype;               /**< PID del cliente destinatario (requerido por msgrcv/msgsnd) */
     int codigo;               /**< Código de respuesta (RESP_OK, RESP_ERROR, etc.) */
     char datos[MAX_DAT_RESP]; /**< Datos de respuesta (lista de catacumbas, mensajes, etc.) */
     int num_elementos;        /**< Número de elementos en la respuesta (útil para listados) */

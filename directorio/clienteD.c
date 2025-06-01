@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <unistd.h>
 #include "directorio.h"
 
 void mostrar_menu()
@@ -19,21 +20,35 @@ void mostrar_menu()
 
 int main()
 {
-    int mailbox_id;
+    int mailbox_solicitudes_id, mailbox_respuestas_id;
     struct solicitud msg;
+    struct respuesta resp;
     int opcion;
     char buffer[150];
+    pid_t mi_pid = getpid();
 
-    // Conectar al mailbox existente
-    mailbox_id = msgget(MAILBOX_KEY, 0666);
-    if (mailbox_id == -1)
+    printf("Cliente iniciado con PID: %d\n", mi_pid);
+
+    // Conectar al mailbox de solicitudes
+    mailbox_solicitudes_id = msgget(MAILBOX_KEY, 0666);
+    if (mailbox_solicitudes_id == -1)
     {
-        perror("Error al conectar con el mailbox");
+        perror("Error al conectar con el mailbox de solicitudes");
         printf("¿Está ejecutándose el servidor?\n");
         exit(EXIT_FAILURE);
     }
 
-    printf("Conectado al mailbox ID: %d\n", mailbox_id);
+    // Conectar al mailbox de respuestas
+    mailbox_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0666);
+    if (mailbox_respuestas_id == -1)
+    {
+        perror("Error al conectar con el mailbox de respuestas");
+        printf("¿Está ejecutándose el servidor?\n");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Conectado a los mailboxes. Solicitudes ID: %d, Respuestas ID: %d\n",
+           mailbox_solicitudes_id, mailbox_respuestas_id);
 
     while (1)
     {
@@ -56,8 +71,8 @@ int main()
             break;
         }
 
-        // Común para todos los mensajes
-        msg.mtype = 1; // Tipo de solicitud para msgrcv
+        // Preparar mensaje común
+        msg.mtype = mi_pid; // Usar PID como identificador
 
         switch (opcion)
         {
@@ -65,14 +80,12 @@ int main()
             msg.tipo = OP_LISTAR;
             msg.texto[0] = '\0'; // No se necesita texto
 
-            if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
+            if (msgsnd(mailbox_solicitudes_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
                 perror("Error al enviar solicitud");
+                break;
             }
-            else
-            {
-                printf("Solicitud de listado enviada.\n");
-            }
+            printf("Solicitud de listado enviada.\n");
             break;
 
         case 2: // Agregar catacumba
@@ -82,7 +95,7 @@ int main()
             fgets(buffer, sizeof(buffer), stdin);
             buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar el salto de línea
 
-            // Copiar el nombre al solicitud
+            // Copiar el nombre al mensaje
             strncpy(msg.texto, buffer, MAX_TEXT - 1);
 
             printf("Ingrese dirección de la catacumba: ");
@@ -93,14 +106,12 @@ int main()
             strncat(msg.texto, ":", MAX_TEXT - strlen(msg.texto) - 1);
             strncat(msg.texto, buffer, MAX_TEXT - strlen(msg.texto) - 1);
 
-            if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
+            if (msgsnd(mailbox_solicitudes_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
                 perror("Error al enviar solicitud");
+                break;
             }
-            else
-            {
-                printf("Solicitud de agregar catacumba enviada.\n");
-            }
+            printf("Solicitud de agregar catacumba enviada.\n");
             break;
 
         case 3: // Buscar catacumba
@@ -112,14 +123,12 @@ int main()
 
             strncpy(msg.texto, buffer, MAX_TEXT - 1);
 
-            if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
+            if (msgsnd(mailbox_solicitudes_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
                 perror("Error al enviar solicitud");
+                break;
             }
-            else
-            {
-                printf("Solicitud de búsqueda enviada.\n");
-            }
+            printf("Solicitud de búsqueda enviada.\n");
             break;
 
         case 4: // Eliminar catacumba
@@ -131,18 +140,33 @@ int main()
 
             strncpy(msg.texto, buffer, MAX_TEXT - 1);
 
-            if (msgsnd(mailbox_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
+            if (msgsnd(mailbox_solicitudes_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
                 perror("Error al enviar solicitud");
+                break;
             }
-            else
-            {
-                printf("Solicitud de eliminación enviada.\n");
-            }
+            printf("Solicitud de eliminación enviada.\n");
             break;
 
         default:
             printf("Opción no válida. Intente de nuevo.\n");
+            continue;
+        }
+
+        // Recibir respuesta del servidor (solo mensajes dirigidos a este PID)
+        printf("Esperando respuesta del servidor...\n");
+        if (msgrcv(mailbox_respuestas_id, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1)
+        {
+            perror("Error al recibir respuesta");
+        }
+        else
+        {
+            printf("Respuesta recibida - Código: %d\n", resp.codigo);
+            printf("Datos: %s\n", resp.datos);
+            if (resp.num_elementos > 0)
+            {
+                printf("Número de elementos: %d\n", resp.num_elementos);
+            }
         }
 
         // Pequeña pausa para poder ver los resultados
