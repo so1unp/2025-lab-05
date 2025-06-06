@@ -43,10 +43,44 @@ struct respuesta {
 ### Estructura de Catacumba
 ```c
 struct catacumba {
-    char nombre[MAX_NOMBRE];
-    char direccion[MAX_DIRECCION];
+    char nombre[MAX_NOM];     // Nombre único identificador de la catacumba
+    char direccion[MAX_RUTA]; // Ruta al archivo de memoria compartida de la catacumba
+    char mailbox[MAX_NOM];    // Mailbox de mensajes de la catacumba
+    int cantJug;              // Cantidad actual de jugadores en la catacumba
+    int cantMaxJug;           // Cantidad máxima de jugadores permitidos
 };
 ```
+
+## Formatos de Datos
+
+### Formato de Agregar Catacumba
+Para agregar una nueva catacumba, el campo `texto` de la solicitud debe contener:
+```
+"nombre|direccion|mailbox"
+```
+
+Los campos de cantidad de jugadores (`cantJug` y `cantMaxJug`) se inicializan automáticamente en 0 y se actualizan consultando la dirección de la catacumba.
+
+**Ejemplo**:
+```
+"Catacumba_Norte|/tmp/catacumba_norte.shm|mq_norte"
+```
+
+### Formato de Respuesta de Listado
+Las catacumbas se devuelven en el campo `datos` de la respuesta con el formato:
+```
+"cat1|dir1|mbox1|jugadores1|max1;cat2|dir2|mbox2|jugadores2|max2;..."
+```
+
+**Ejemplo**:
+```
+"Catacumba_Norte|/tmp/catacumba_norte.shm|mq_norte|5|15;Catacumba_Sur|/tmp/catacumba_sur.shm|mq_sur|0|10"
+```
+
+### Validaciones
+- Todos los campos (`nombre`, `direccion`, `mailbox`) son obligatorios
+- Los campos `cantJug` y `cantMaxJug` se inicializan automáticamente en 0
+- Los valores reales de jugadores se obtienen consultando la dirección de la catacumba
 
 ## Operaciones Soportadas
 
@@ -68,32 +102,43 @@ struct respuesta resp;
 // resp.mtype = PID del cliente
 // resp.codigo = RESP_OK
 // resp.num_elementos = número de catacumbas
-// resp.datos = "Catacumba1:Direccion1\nCatacumba2:Direccion2\n..."
+// resp.datos = "Catacumba1|Dir1|Mailbox1|0|10;Catacumba2|Dir2|Mailbox2|5|20;..."
 ```
+
+**Formato de datos**: Cada catacumba se representa como `"nombre|direccion|mailbox|cantJug|maxJug"` y múltiples catacumbas se separan con `;`
 
 ### 2. Agregar Catacumba (OP_AGREGAR)
 
-**Propósito**: Registrar una nueva catacumba en el directorio.
+**Propósito**: Registrar una nueva catacumba en el directorio con información completa.
 
 **Solicitud**:
 ```c
 struct solicitud msg;
 msg.mtype = getpid();
 msg.tipo = OP_AGREGAR;
-strcpy(msg.texto, "NombreCatacumba:DireccionCatacumba");
+strcpy(msg.texto, "NombreCatacumba|DireccionCatacumba|MailboxCatacumba");
 ```
 
-**Formato del texto**: `"nombre:direccion"`
+**Formato del texto**: `"nombre|direccion|mailbox"`
+- `nombre`: Nombre único de la catacumba
+- `direccion`: Ruta al archivo de memoria compartida
+- `mailbox`: Identificador del mailbox de la catacumba
+
+**Nota**: Los campos `cantJug` y `cantMaxJug` se inicializan automáticamente en 0. Los valores reales se obtienen consultando la dirección de la catacumba.
 
 **Respuesta**:
 ```c
 // Éxito:
 // resp.codigo = RESP_OK
-// resp.datos = "Catacumba agregada exitosamente."
+// resp.datos = "Catacumba agregada correctamente."
 
 // Error (directorio lleno):
+// resp.codigo = RESP_LIMITE_ALCANZADO
+// resp.datos = "Error: máximo de catacumbas alcanzado."
+
+// Error (formato incorrecto):
 // resp.codigo = RESP_ERROR
-// resp.datos = "Directorio lleno. No se puede agregar más catacumbas."
+// resp.datos = "Error: formato incorrecto. Use 'nombre|direccion|mailbox'"
 ```
 
 ### 3. Buscar Catacumba (OP_BUSCAR)
@@ -113,10 +158,10 @@ strcpy(msg.texto, "NombreBuscado");
 // Encontrada:
 // resp.codigo = RESP_OK
 // resp.num_elementos = 1
-// resp.datos = "NombreCatacumba:DireccionCatacumba"
+// resp.datos = "NombreCatacumba|DireccionCatacumba|MailboxCatacumba|5|10"
 
 // No encontrada:
-// resp.codigo = RESP_ERROR
+// resp.codigo = RESP_NO_ENCONTRADO
 // resp.datos = "Catacumba no encontrada."
 ```
 
@@ -136,10 +181,10 @@ strcpy(msg.texto, "NombreAEliminar");
 ```c
 // Eliminada:
 // resp.codigo = RESP_OK
-// resp.datos = "Catacumba eliminada exitosamente."
+// resp.datos = "Catacumba eliminada correctamente."
 
 // No encontrada:
-// resp.codigo = RESP_ERROR
+// resp.codigo = RESP_NO_ENCONTRADO
 // resp.datos = "Catacumba no encontrada."
 ```
 
@@ -224,6 +269,21 @@ int main() {
         exit(1);
     }
     
+    // Ejemplo: Agregar una catacumba
+    msg.mtype = mi_pid;
+    msg.tipo = OP_AGREGAR;
+    strcpy(msg.texto, "MiCatacumba|/tmp/mi_catacumba.shm|mq_mi_catacumba");
+    
+    // Enviar solicitud
+    msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0);
+    
+    // Recibir respuesta
+    msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0);
+    
+    if (resp.codigo == RESP_OK) {
+        printf("Catacumba agregada: %s\n", resp.datos);
+    }
+    
     // Ejemplo: Listar catacumbas
     msg.mtype = mi_pid;
     msg.tipo = OP_LISTAR;
@@ -235,7 +295,7 @@ int main() {
     // Recibir respuesta (SOLO para este PID)
     msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0);
     
-    printf("Respuesta: %s\n", resp.datos);
+    printf("Lista de catacumbas: %s\n", resp.datos);
     
     return 0;
 }
@@ -250,8 +310,43 @@ if (resp.codigo == RESP_OK) {
     if (resp.num_elementos > 0) {
         printf("Elementos encontrados: %d\n", resp.num_elementos);
     }
+} else if (resp.codigo == RESP_NO_ENCONTRADO) {
+    printf("Elemento no encontrado: %s\n", resp.datos);
+} else if (resp.codigo == RESP_LIMITE_ALCANZADO) {
+    printf("Límite alcanzado: %s\n", resp.datos);
 } else {
     printf("Error en la operación: %s\n", resp.datos);
+}
+```
+
+### Parsing de Respuestas
+
+#### Parsear lista de catacumbas
+```c
+void parsearListaCatacumbas(char *datos) {
+    char *catacumba = strtok(datos, ";");
+    int index = 1;
+    
+    while (catacumba != NULL) {
+        char *nombre = strtok(catacumba, "|");
+        char *direccion = strtok(NULL, "|");
+        char *mailbox = strtok(NULL, "|");
+        char *cantJug_str = strtok(NULL, "|");
+        char *maxJug_str = strtok(NULL, "|");
+        
+        if (nombre && direccion && mailbox && cantJug_str && maxJug_str) {
+            int cantJug = atoi(cantJug_str);
+            int maxJug = atoi(maxJug_str);
+            
+            printf("%d. %s\n", index++, nombre);
+            printf("   Dirección: %s\n", direccion);
+            printf("   Mailbox: %s\n", mailbox);
+            printf("   Jugadores: %d/%d\n", cantJug, maxJug);
+            printf("\n");
+        }
+        
+        catacumba = strtok(NULL, ";");
+    }
 }
 ```
 
@@ -290,5 +385,19 @@ killall server
 ### Limitaciones
 - Máximo `MAX_CATACUMBAS` catacumbas (definido en `directorio.h`)
 - Tamaño máximo de texto: `MAX_TEXT` caracteres
-- Tamaño máximo de datos de respuesta: `MAX_DATA` caracteres
+- Tamaño máximo de datos de respuesta: `MAX_DAT_RESP` caracteres
+- Nombres de catacumba: máximo `MAX_NOM` caracteres
+- Rutas de directorio: máximo `MAX_RUTA` caracteres
+
+### Formato de Datos
+- **Separador de campos**: `|` (pipe)
+- **Separador de registros**: `;` (punto y coma)
+- **Campos obligatorios**: Todos los campos son requeridos
+- **Validación de jugadores**: cantJug >= 0, maxJug > 0, cantJug <= maxJug
+
+### Códigos de Respuesta Extendidos
+- `RESP_OK`: Operación exitosa
+- `RESP_ERROR`: Error general en la operación
+- `RESP_NO_ENCONTRADO`: Catacumba no encontrada
+- `RESP_LIMITE_ALCANZADO`: Máximo de catacumbas alcanzado
 

@@ -21,7 +21,7 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
  * @brief Agrega una nueva catacumba al directorio
  * @param catacumbas Array donde se almacenan las catacumbas
  * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
- * @param msg Mensaje de solicitud con los datos de la catacumba (formato: "nombre:direccion")
+ * @param msg Mensaje de solicitud con los datos de la catacumba (formato: "nombre|direccion|mailbox")
  * @param resp Puntero a la estructura de respuesta donde se almacenará el resultado
  **/
 void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp);
@@ -84,7 +84,9 @@ int main(int argc, char *argv[])
     struct respuesta resp;                             // Estructura para respuestas a enviar
     int recibido;                                      // Bytes recibidos en msgrcv
 
-    printf("Directorio de Catacumbas iniciando...\n");
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("              DIRECTORIO DE CATACUMBAS - INICIANDO              \n");
+    printf("═══════════════════════════════════════════════════════════════\n\n");
 
     // ==================== CREACIÓN DE MAILBOXES ====================
     // Crear o conectar al mailbox de solicitudes
@@ -103,8 +105,13 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    printf("Mailboxes creados/conectados correctamente.\n");
-    printf("Solicitudes ID: %d, Respuestas ID: %d\n", mailbox_solicitudes_id, mailbox_respuestas_id);
+    printf("\n✓ Mailboxes creados/conectados correctamente.\n");
+    printf("  ├─ Solicitudes ID: %d\n", mailbox_solicitudes_id);
+    printf("  └─ Respuestas ID:  %d\n\n", mailbox_respuestas_id);
+
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("           SERVIDOR LISTO - ESPERANDO SOLICITUDES              \n");
+    printf("═══════════════════════════════════════════════════════════════\n\n");
 
     // ==================== BUCLE PRINCIPAL ====================
     while (1)
@@ -139,7 +146,7 @@ int main(int argc, char *argv[])
             break;
         default:
             // Operación no reconocida
-            printf("Operación desconocida: %d\n", msg.tipo);
+            printf("⚠️  OPERACIÓN DESCONOCIDA: %d\n\n", msg.tipo);
             resp.codigo = RESP_ERROR;
             strcpy(resp.datos, "Operación desconocida.");
             break;
@@ -165,17 +172,22 @@ int main(int argc, char *argv[])
  **/
 void RecibirSolicitudes(int *recibido, int mailbox_solicitudes_id, struct solicitud *msg)
 {
-    printf("Esperando mensajes...\n");
+    printf("⏳ Esperando nuevas solicitudes...\n");
 
     // Recibir solicitud (bloqueante)
     *recibido = msgrcv(mailbox_solicitudes_id, msg, sizeof(struct solicitud) - sizeof(long), 0, 0);
     if (*recibido == -1)
     {
-        perror("Error al recibir solicitud");
+        perror("❌ Error al recibir solicitud");
         return;
     }
 
-    printf("Mensaje recibido del cliente PID %ld. Tipo: %d, Texto: %s\n", msg->mtype, msg->tipo, msg->texto);
+    printf("───────────────────────────────────────────────────────────────\n");
+    printf("📨 NUEVA SOLICITUD RECIBIDA\n");
+    printf("  ├─ Cliente PID: %ld\n", msg->mtype);
+    printf("  ├─ Tipo Op.:    %d\n", msg->tipo);
+    printf("  └─ Datos:       \"%s\"\n", msg->texto);
+    printf("───────────────────────────────────────────────────────────────\n\n");
 }
 
 /**
@@ -188,20 +200,21 @@ void enviarRespuesta(int mailbox_respuestas_id, struct respuesta *resp)
 {
     if (msgsnd(mailbox_respuestas_id, resp, sizeof(struct respuesta) - sizeof(long), 0) == -1)
     {
-        perror("Error al enviar respuesta");
+        perror("❌ Error al enviar respuesta");
     }
     else
     {
-        printf("Respuesta enviada al cliente PID %ld\n", resp->mtype);
+        printf("📤 Respuesta enviada al cliente PID %ld\n", resp->mtype);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
     }
 }
 
 /**
  * @brief Lista todas las catacumbas registradas en el directorio
  *
- * Construye una cadena de texto con todas las catacumbas disponibles
- * y la almacena en la estructura de respuesta. Si no hay catacumbas,
- * informa que el directorio está vacío.
+ * Construye una cadena de texto con todas las catacumbas disponibles en formato
+ * "nombre|direccion|mailbox|cantJug|maxJug" separadas por ";" y la almacena
+ * en la estructura de respuesta. Si no hay catacumbas, informa que el directorio está vacío.
  *
  * @param resp Puntero a la estructura de respuesta donde se almacenará el resultado
  * @param catacumbas Array de catacumbas registradas
@@ -209,40 +222,58 @@ void enviarRespuesta(int mailbox_respuestas_id, struct respuesta *resp)
  **/
 void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int *num_catacumbas)
 {
-    printf("Listando catacumbas (%d total):\n", *num_catacumbas);
+    printf("📋 LISTANDO CATACUMBAS\n");
+    printf("   Total registradas: %d\n\n", *num_catacumbas);
+
     resp->codigo = RESP_OK;
     resp->num_elementos = *num_catacumbas;
 
     if (*num_catacumbas > 0)
     {
+        resp->datos[0] = '\0'; // Limpiar el buffer de datos
+
         for (int i = 0; i < *num_catacumbas; i++)
         {
-            char temp[200]; // Buffer más grande para evitar truncamiento
-            snprintf(temp, sizeof(temp), "%d. %.40s -> %.80s\n",
-                     i + 1, catacumbas[i].nombre, catacumbas[i].direccion);
+            char temp[300]; // Buffer para una catacumba en formato |
+            snprintf(temp, sizeof(temp), "%s|%s|%s|%d|%d",
+                     catacumbas[i].nombre,
+                     catacumbas[i].direccion,
+                     catacumbas[i].mailbox,
+                     catacumbas[i].cantJug,
+                     catacumbas[i].cantMaxJug);
 
             // Verificar que no se exceda el buffer de respuesta
             if (strlen(resp->datos) + strlen(temp) < MAX_DAT_RESP - 1)
             {
                 strncat(resp->datos, temp, MAX_DAT_RESP - strlen(resp->datos) - 1);
+
+                // Agregar separador solo si no es la última catacumba
+                if (i < *num_catacumbas - 1)
+                {
+                    strncat(resp->datos, ";", MAX_DAT_RESP - strlen(resp->datos) - 1);
+                }
             }
 
-            printf("%d. Nombre: %s, Dirección: %s\n",
-                   i + 1, catacumbas[i].nombre, catacumbas[i].direccion);
+            printf("   %d. %-15s | %-20s | %-10s | %d/%d jugadores\n",
+                   i + 1, catacumbas[i].nombre, catacumbas[i].direccion,
+                   catacumbas[i].mailbox, catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
         }
+        printf("\n✅ Listado completado (%d catacumbas enviadas)\n\n", *num_catacumbas);
     }
     else
     {
-        strcpy(resp->datos, "No hay catacumbas registradas.\n");
+        strcpy(resp->datos, "No hay catacumbas registradas.");
+        printf("   ℹ️  No hay catacumbas registradas en el directorio.\n\n");
     }
 }
 
 /**
  * @brief Agrega una nueva catacumba al directorio
  *
- * Procesa el mensaje del cliente que debe contener el nombre y dirección
- * de la catacumba en formato "nombre:direccion". Valida que no se exceda
- * el límite máximo de catacumbas y que el formato sea correcto.
+ * Procesa el mensaje del cliente que debe contener el nombre, dirección y mailbox
+ * de la catacumba en formato "nombre|direccion|mailbox". Los campos de cantidad
+ * de jugadores se inicializan automáticamente (cantJug=0, maxJug=0). Valida que
+ * no se exceda el límite máximo de catacumbas y que el formato sea correcto.
  *
  * @param catacumbas Array donde se almacenan las catacumbas
  * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
@@ -251,52 +282,63 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
  **/
 void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp)
 {
+    printf("➕ AGREGANDO NUEVA CATACUMBA\n");
+
     // Verificar que no se haya alcanzado el límite máximo
     if (*num_catacumbas < MAX_CATACUMBAS)
     {
-        // Parsear el mensaje en formato "nombre:direccion"
-        char *token = strtok(msg->texto, ":");
-        if (token != NULL)
+        // Hacer una copia del mensaje para usar con strtok
+        char texto_copia[MAX_TEXT];
+        strncpy(texto_copia, msg->texto, MAX_TEXT - 1);
+        texto_copia[MAX_TEXT - 1] = '\0';
+
+        // Parsear el mensaje en formato "nombre|direccion|mailbox"
+        char *nombre = strtok(texto_copia, "|");
+        char *direccion = strtok(NULL, "|");
+        char *mailbox = strtok(NULL, "|");
+
+        if (nombre != NULL && direccion != NULL && mailbox != NULL)
         {
-            // Copiar el nombre de la catacumba
-            strncpy(catacumbas[*num_catacumbas].nombre, token, MAX_NOM - 1);
-            catacumbas[*num_catacumbas].nombre[MAX_NOM - 1] = '\0'; // Asegurar terminación null
+            // Copiar los campos básicos de la catacumba
+            strncpy(catacumbas[*num_catacumbas].nombre, nombre, MAX_NOM - 1);
+            catacumbas[*num_catacumbas].nombre[MAX_NOM - 1] = '\0';
 
-            // Obtener la dirección
-            token = strtok(NULL, ":");
-            if (token != NULL)
-            {
-                // Copiar la dirección de la catacumba
-                strncpy(catacumbas[*num_catacumbas].direccion, token, MAX_RUTA - 1);
-                catacumbas[*num_catacumbas].direccion[MAX_RUTA - 1] = '\0'; // Asegurar terminación null
+            strncpy(catacumbas[*num_catacumbas].direccion, direccion, MAX_RUTA - 1);
+            catacumbas[*num_catacumbas].direccion[MAX_RUTA - 1] = '\0';
 
-                (*num_catacumbas)++; // Incrementar el contador
-                printf("Catacumba agregada correctamente.\n");
+            strncpy(catacumbas[*num_catacumbas].mailbox, mailbox, MAX_NOM - 1);
+            catacumbas[*num_catacumbas].mailbox[MAX_NOM - 1] = '\0';
 
-                // Configurar respuesta exitosa
-                resp->codigo = RESP_OK;
-                strcpy(resp->datos, "Catacumba agregada correctamente.");
-            }
-            else
-            {
-                // Error: falta la dirección
-                printf("Error: formato incorrecto - falta dirección.\n");
-                resp->codigo = RESP_ERROR;
-                strcpy(resp->datos, "Error: formato incorrecto. Use 'nombre:direccion'");
-            }
+            // Inicializar automáticamente los campos de jugadores
+            // Estos se actualizarán consultando la dirección de la catacumba
+            catacumbas[*num_catacumbas].cantJug = 0;
+            catacumbas[*num_catacumbas].cantMaxJug = 0;
+
+            (*num_catacumbas)++; // Incrementar el contador
+
+            printf("   ├─ Nombre:     \"%s\"\n", nombre);
+            printf("   ├─ Dirección:  \"%s\"\n", direccion);
+            printf("   ├─ Mailbox:    \"%s\"\n", mailbox);
+            printf("   └─ Estado:     Inicializada (0/0 jugadores)\n");
+            printf("\n✅ Catacumba agregada correctamente (Total: %d/%d)\n\n", *num_catacumbas, MAX_CATACUMBAS);
+
+            // Configurar respuesta exitosa
+            resp->codigo = RESP_OK;
+            strcpy(resp->datos, "Catacumba agregada correctamente.");
         }
         else
         {
-            // Error: formato completamente incorrecto
-            printf("Error: formato incorrecto - no se pudo parsear.\n");
+            // Error: formato incorrecto
+            printf("   ❌ Error: formato incorrecto - faltan campos.\n");
+            printf("      Formato esperado: 'nombre|direccion|mailbox'\n\n");
             resp->codigo = RESP_ERROR;
-            strcpy(resp->datos, "Error: formato incorrecto. Use 'nombre:direccion'");
+            strcpy(resp->datos, "Error: formato incorrecto. Use 'nombre|direccion|mailbox'");
         }
     }
     else
     {
         // Error: se alcanzó el límite máximo de catacumbas
-        printf("Error: máximo de catacumbas alcanzado (%d/%d).\n", *num_catacumbas, MAX_CATACUMBAS);
+        printf("   ❌ Error: máximo de catacumbas alcanzado (%d/%d)\n\n", *num_catacumbas, MAX_CATACUMBAS);
         resp->codigo = RESP_LIMITE_ALCANZADO;
         strcpy(resp->datos, "Error: máximo de catacumbas alcanzado.");
     }
@@ -306,8 +348,8 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
  * @brief Busca una catacumba específica por su nombre
  *
  * Recorre el array de catacumbas buscando una que coincida con el nombre
- * proporcionado en la solicitud. Si la encuentra, devuelve sus datos;
- * si no, informa que no fue encontrada.
+ * proporcionado en la solicitud. Si la encuentra, devuelve sus datos en formato
+ * "nombre|direccion|mailbox|cantJug|maxJug"; si no, informa que no fue encontrada.
  *
  * @param catacumbas Array de catacumbas donde buscar
  * @param num_catacumbas Puntero al número actual de catacumbas
@@ -316,17 +358,24 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
  **/
 void buscarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp)
 {
+    printf("🔍 BUSCANDO CATACUMBA: \"%s\"\n", msg->texto);
+
     int encontrado = 0;
     for (int i = 0; i < *num_catacumbas; i++)
     {
         if (strcmp(catacumbas[i].nombre, msg->texto) == 0)
         {
-            printf("Catacumba encontrada: %s en %s\n",
-                   catacumbas[i].nombre, catacumbas[i].direccion);
+            printf("   ├─ Nombre:     \"%s\"\n", catacumbas[i].nombre);
+            printf("   ├─ Dirección:  \"%s\"\n", catacumbas[i].direccion);
+            printf("   ├─ Mailbox:    \"%s\"\n", catacumbas[i].mailbox);
+            printf("   └─ Jugadores:  %d/%d\n", catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
+            printf("\n✅ Catacumba encontrada y datos enviados\n\n");
 
             resp->codigo = RESP_OK;
-            snprintf(resp->datos, MAX_DAT_RESP, "Catacumba encontrada: %.40s -> %.80s",
-                     catacumbas[i].nombre, catacumbas[i].direccion);
+            resp->num_elementos = 1;
+            snprintf(resp->datos, MAX_DAT_RESP, "%s|%s|%s|%d|%d",
+                     catacumbas[i].nombre, catacumbas[i].direccion,
+                     catacumbas[i].mailbox, catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
             encontrado = 1;
             break;
         }
@@ -334,8 +383,9 @@ void buscarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct 
 
     if (!encontrado)
     {
-        printf("Catacumba '%s' no encontrada.\n", msg->texto);
+        printf("   ❌ Catacumba no encontrada en el directorio.\n\n");
         resp->codigo = RESP_NO_ENCONTRADO;
+        resp->num_elementos = 0;
         snprintf(resp->datos, MAX_DAT_RESP, "Catacumba '%.40s' no encontrada.", msg->texto);
     }
 }
@@ -357,6 +407,8 @@ void buscarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct 
  **/
 void eliminarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp)
 {
+    printf("🗑️  ELIMINANDO CATACUMBA: \"%s\"\n", msg->texto);
+
     int encontrado = -1; // Índice de la catacumba encontrada (-1 si no se encuentra)
 
     // Buscar la catacumba en el array
@@ -372,14 +424,22 @@ void eliminarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struc
     if (encontrado >= 0)
     {
         // Catacumba encontrada: proceder con la eliminación
+        printf("   ├─ Catacumba localizada en posición %d\n", encontrado + 1);
+        printf("   ├─ Reorganizando array de catacumbas...\n");
+
         // Mover todos los elementos posteriores una posición hacia adelante
         for (int i = encontrado; i < *num_catacumbas - 1; i++)
         {
             strcpy(catacumbas[i].nombre, catacumbas[i + 1].nombre);
             strcpy(catacumbas[i].direccion, catacumbas[i + 1].direccion);
+            strcpy(catacumbas[i].mailbox, catacumbas[i + 1].mailbox);
+            catacumbas[i].cantJug = catacumbas[i + 1].cantJug;
+            catacumbas[i].cantMaxJug = catacumbas[i + 1].cantMaxJug;
         }
         (*num_catacumbas)--; // Decrementar el contador de catacumbas
-        printf("Catacumba '%s' eliminada.\n", msg->texto);
+
+        printf("   └─ Total actual: %d catacumbas\n", *num_catacumbas);
+        printf("\n✅ Catacumba eliminada correctamente\n\n");
 
         // Configurar respuesta exitosa
         resp->codigo = RESP_OK;
@@ -388,7 +448,7 @@ void eliminarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struc
     else
     {
         // Catacumba no encontrada
-        printf("Catacumba '%s' no encontrada para eliminar.\n", msg->texto);
+        printf("   ❌ Catacumba no encontrada para eliminar.\n\n");
         resp->codigo = RESP_NO_ENCONTRADO;
         snprintf(resp->datos, MAX_DAT_RESP, "Catacumba '%.40s' no encontrada.", msg->texto);
     }
