@@ -20,6 +20,3 @@ Ejemplo de como lo visualizamos desde el cliente:
 
 Nombre-cantidadJugadoresConectados/capacidadMaximaMapa
 "cat2-3/5"
-
-
-
