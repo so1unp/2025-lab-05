@@ -1,0 +1,27 @@
+RELACIÓN CON SERVIDOR**
+
+Cada jugador al iniciar una partida nueva envia al servidor su pid que corresponderá al id del jugador.
+Para comunicarnos con el servidor, enviaremos un mensajea que contenga:
+
+- PID (id del jugador)
+- Rol del jugador (guardián o explorador)
+- Posición (estruct: posX, posY)
+- Mensaje (si hubo colisiones especiales Ej: conseguír tesoro, explorador atrapado)
+
+Nosotros (cliente) nos encargamos de:
+Detectar bordes, obstáculos y colisiones especiales, para no sobrecargar el servidor con constantes solicitudes.
+
+RELACIÓN CON DIRECTORIO**
+Para la lista de mapas disponibles, necesitaremos comunicarnos con el directorio, el cual tiene la información:
+
+- Nombre del mapa
+- Direccion de memoria compartida
+- Mailboc de la catacumba
+- Capacidad máxima del mapa
+- Cantidad de jugadores actual
+
+
+Ejemplo de como lo visualizamos desde el cliente:
+
+Nombre-cantidadJugadoresConectados/capacidadMaximaMapa
+"cat2-3/5"
