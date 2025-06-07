@@ -4,16 +4,16 @@
 #define HEIGHT 10
 
 char map[HEIGHT][WIDTH + 1] = {
-    "###################",
-    "#     #          $#",
-    "#  ### ######## ###",
-    "#      #          #",
-    "# ###### ######## #",
-    "#        #        #",
-    "# ######## ###### #",
-    "#      G          #",
-    "# ############### #",
-    "###################"};
+    "####################",
+    "#     #          $ #",
+    "#  ### ######## ####",
+    "#      #           #",
+    "# ###### ######## ##",
+    "#        #         #",
+    "# ######## ###### ##",
+    "#      G           #",
+    "# ###############  #",
+    "####################"};
 
 int px = 1, py = 1;
 
@@ -21,10 +21,31 @@ void draw_map()
 {
     for (int y = 0; y < HEIGHT; y++)
     {
-        mvprintw(y, 0, map[y]);
+        for (int x = 0; x < WIDTH; x++)
+        {
+            if (map[y][x] == '#') {
+                //Paredes
+                attron(COLOR_PAIR(1));
+                mvaddch(y, x, map[y][x]);
+                attroff(COLOR_PAIR(1));
+            } else if (map[y][x] == ' ') {
+                //Espacio caminale
+                attron(COLOR_PAIR(3));
+                mvaddch(y, x, map[y][x]);
+                attroff(COLOR_PAIR(2));
+            } else if (map[y][x] == '$') {
+                //Tesoro
+                attron(COLOR_PAIR(2));
+                mvaddch(y, x, map[y][x]);
+                attroff(COLOR_PAIR(3));
+            } else {
+                mvaddch(y, x, map[y][x]);
+            }
+        }
     }
     refresh();
 }
+
 
 int is_walkable(int y, int x)
 {
@@ -36,6 +57,17 @@ int is_walkable(int y, int x)
 int main()
 {
     initscr();
+    //Habilito colores
+    start_color(); 
+    //Defino los pares de colores
+
+    //Paredes
+    init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+    //Tesoro
+    init_pair(2, COLOR_RED, COLOR_YELLOW);
+    //Espacio caminable
+    init_pair(3, COLOR_BLACK, COLOR_GREEN);
+    
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
@@ -77,7 +109,7 @@ int main()
 
         if (map[py][px] == '$')
         {
-            mvprintw(HEIGHT + 1, 0, "ya ganaste pa, toca la q para salir del juego");
+            mvprintw(HEIGHT + 1, 0, "Conseguiste todos los tesoros, felicitaciones! :)");
         }
         refresh();
     }
