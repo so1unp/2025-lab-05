@@ -1,132 +1,157 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <signal.h>
 #include <time.h>
+#include "catacumbas.h"
+
+#define SHM_PREFIX "/mapa_memoria_"
 
 
-#define MAX_JUGADORES 10
-#define MAX_TESOROS 10
-#define HEIGHT 25
-#define WIDTH 80
-// por ahora no usar limitantes para guardianes y raiders
-#define MAX_GUARDIANES MAX_JUGADORES / 2 
-#define MAX_EXPLORADORES MAX_JUGADORES - MAX_GUARDIANES
+void usage(char *argv[]);
+void F(char msg[]);
 
-int px = 1, py = 1;
+// mapa donde aleatoria mente elige a los 
+void designArena(char mapa[FILAS][COLUMNAS]);
 
-struct Tesoro {
-    int local_id;
-    int fila;
-    int columna;
-};
+// recibe un puntero en el que trabajar y un mapa en donde almacenar
+void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]);
 
-struct Jugador {
-    int local_id;
-    int fila;
-    int columna;
-    char tipo;
-    int mov_fila;
-    int mov_columna;
-};
+void updateState();
 
+struct Tesoro tesoros[MAX_TESOROS];
+struct Jugador jugadores[MAX_JUGADORES];
+char (*mapa)[COLUMNAS];
+struct Estado *estado;
 
-struct Arena {
-    struct Tesoro tesoros[MAX_TESOROS];
-    struct Jugador jugadores[MAX_JUGADORES];
-    int mapa[WIDTH][HEIGHT]; // con los IDs
-};
+int mailbox_solicitudes_id;
+int mailbox_movimientos_id;
 
-struct Mensaje {
-    struct Jugador remitente;
-    struct Jugador receptor;
-    char msg[150];
-};
+// TODO: Refactorizar el manejo de argumentos usando switch-case 
+// para aceptar múltiples comandos según el valor de argv[1].
+// Ejemplos:
+//     ./server -s 1    -> iniciar catacumba 1 (start)
+//     ./server -r 1    -> eliminar catacumba 1 (remove)
+//     ./server -h      -> mostrar ayuda (help)
+int main(int argc, char* argv[]) {
 
-void receiveAction(); 
-void sendSomething();
-struct Arena designArena(void);
-void genTreasure(struct Arena *arena);
-void updateState(struct Arena *arena);
-void eraseArena(struct Arena *arena); 
-int _login(struct Arena *arena, char tipo); 
+    if(argc < 2){
+        usage(argv);
+        exit(EXIT_SUCCESS);
+    }
+    int catacumba_id = atoi(argv[1]);
+    if (catacumba_id < 0 || catacumba_id >= TOTAL_CATACUMBAS) F("Número de catacumba inválido");
+    
+    int size_mapa = sizeof(char) * FILAS * COLUMNAS;
+    int size_estado = sizeof(struct Estado);
 
-int main(int argc, char* argv[])
-{
-    printf("Catacumba\n");
+    // ===============================
+    // INICIALIZAR MEMORIA COMPARTIDA
+    // ===============================
+    
+    char shm_mapa_nombre[128];
+    char shm_estado_nombre[128];
+
+    snprintf(shm_mapa_nombre, sizeof(shm_mapa_nombre), 
+        SHM_MAPA_PREFIX "%s", catacumbas[catacumba_id]);
+    snprintf(shm_estado_nombre, sizeof(shm_estado_nombre), 
+        SHM_ESTADO_PREFIX "%s", catacumbas[catacumba_id]);
+
+    int shm_mapa_fd = 
+        shm_open(shm_mapa_nombre,
+             O_CREAT | O_RDWR | O_EXCL, 0664);
+    if (shm_mapa_fd == -1) F("Error creando shm mapa");
+    if (ftruncate(shm_mapa_fd, size_mapa) == -1) F("Error truncando shm mapa");
+
+    mapa = mmap(NULL,
+         size_mapa, PROT_READ | PROT_WRITE, MAP_SHARED, shm_mapa_fd, 0);
+    if (mapa == MAP_FAILED) F("Error mapeando shm mapa");
+
+    int shm_estado_fd = 
+        shm_open(shm_estado_nombre,
+             O_CREAT | O_RDWR | O_EXCL, 0664);
+    if (shm_estado_fd == -1) F("Error creando shm estado");
+    if (ftruncate(shm_estado_fd, size_estado) == -1) F("Error truncando shm estado");
+
+    estado =  mmap(NULL,
+        size_estado, PROT_READ | PROT_WRITE, MAP_SHARED, shm_estado_fd, 0);
+    if (estado == MAP_FAILED) F("Error mapeando shm estado");
+
+    // ===============================
+    // INICIALIZAR ESTRUCTURAS
+    // ===============================
+    designArena(mapa);
+    generarTesoros(tesoros, mapa);
+    memset(estado, 0, sizeof(struct Estado));
+    estado->max_jugadores = MAX_JUGADORES;
+
+    printf("Servidor listo para catacumba '%s'. Presiona Enter para salir...\n", catacumbas[catacumba_id]);
+    getchar();
+
+    munmap(mapa, size_mapa);
+    munmap(estado, size_estado);
+    close(shm_mapa_fd);
+    close(shm_estado_fd);
+    shm_unlink(shm_mapa_nombre);
+    shm_unlink(shm_estado_nombre);
+
     exit(EXIT_SUCCESS);
 }
 
-// Generar los tesoros para una Arena dada
-void genTreasure(struct Arena *arena) { 
-    int tx, ty, i;
+void usage(char *argv[])
+{
+    fprintf(stderr, "Uso: %s <numero_catacumba>\n", argv[0]);
+    fprintf(stderr, "Catacumbas disponibles:\n");
+    for (int i = 0; i < TOTAL_CATACUMBAS; i++) {
+        fprintf(stderr, "\t%d: %s\n", i, catacumbas[i]);
+    }
+}
+
+// Convenciones de valores en el mapa:
+// -1 → pared
+//  0 → celda libre
+//  1..MAX_TESOROS → tesoros
+// PID de jugador → cuando un jugador está en la celda
+void designArena(char mapa[FILAS][COLUMNAS]) {
+    for (int i = 0; i < FILAS; ++i) {
+        for (int j = 0; j < COLUMNAS; ++j) {
+            // limites del mapa
+            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1) {
+                mapa[i][j] = -1;  // pared
+            } else { 
+                // paredes internas 20% probabilidad de aparecer
+                mapa[i][j] = (rand() % 10 < 2) ? -1 : 0;
+            }
+        }
+    }
+}
+
+void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) { 
+    int fila, columna, i, libre;
     for (i = 0; i < MAX_TESOROS; i++) {
-        tx = 1 + rand() % (WIDTH-1); // x <- de 1 a 79 ?
-        ty = 1 + rand() % (HEIGHT-1); // y <- de 1 a 24 ?
-
-        arena->tesoros[i].columna = tx;
-        arena->tesoros[i].fila = ty;
-        arena->tesoros[i].local_id = i;
+        do {
+            libre = 1;
+            fila = 1 + rand() % (FILAS-2);
+            columna = 1 + rand() % (COLUMNAS-2);
+            if (mapa[fila][columna] != 0) libre = 0;
+        } while (!libre);
+        mapa[fila][columna] = i + 1;
+        tesoros[i].id = i + 1;
+        tesoros[i].posicion = (struct Posicion){fila, columna};
     }
-    // probar que funcione
-    // falta un validador de posiciones
 }
 
-// cliente envia una accion: movimiento, mensajes a otros jugadores.
-void receiveAction() {
-    // abrir mensaje
-    // si la accion es valida actualizar el estado
-    // case de acciones
+void F(char msg[]) {
+    perror(msg);
+    exit(EXIT_FAILURE);
 }
 
- // respondemos con mensajes, resultados de las acciones.
-void sendSomething() {
-    // despues de actualizar la memoria
-    // responder al cliente
-}
 
- // la creacion de una catacumba, se deberia retornar 
-struct Arena designArena() {
-    struct Arena newarena;
-    genTreasure(&newarena);
-    // faltan cosas...
-    // avisar al directorio
-    return newarena;
-}
-
-// en mem.comp. el estado de una catacumba 
-void updateState(struct Arena *arena){
-    // modificaciones realizadas dentro de la arena
-    // movimientos, tesoros tomados, colision.
-}
-
-// eliminar una Arena
-void eraseArena(struct Arena *arena) {
-    // avisar al directorio
-    // borrar mapa
-}
-
-// ingresa un jugador a una Arena seleccionada
-// debe retorno un valor para saber si fue exitoso
-int _login(struct Arena *arena, char tipo) {
-    // refactoring:
-    // >>> max guardianes
-    // >>> max exploradores
-    // >>> discutir la posicion inicial de un jugador 
-
-    int i; 
-    for (i = 0; i < MAX_JUGADORES; i++) {
-        if (arena->jugadores[i].tipo == '\0') { // char null = '\0'
-            // dado jugadores[i] = libre registrar jugador
-            arena->jugadores[i].columna = i+1; // esto solo es para probar
-            arena->jugadores[i].fila = i+1;
-            arena->jugadores[i].local_id = i;
-            arena->jugadores[i].tipo = tipo;
-            arena->jugadores[i].mov_columna = 0; // ?
-            arena->jugadores[i].mov_fila = 0; // ?
-            
-            return i; // se registro un jugador
-        } 
-    }
-    // cq valor no positivo es falso
-    return -1; // no se registro un jugador
-}
+// AGREGAR
+// semaforos para gestionar el acceso a la memoria compartida.
+// mediante mensajes la gestion acciones: login, movimientos, 
+// mediante mensajes comunicacion con directorio
