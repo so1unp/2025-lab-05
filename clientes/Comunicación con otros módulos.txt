@@ -1,0 +1,22 @@
+RELACIÓN CON SERVIDOR**
+
+Cada jugador al iniciar una partida nueva recibe un id que será el pid.
+Para comunicarnos con el servidor, enviaremos un mensaje que contenga:
+
+- PID (id del jugador)
+- Rol del jugador (guardián o explorador)
+
+Nosotros (cliente) nos encargamos de:
+Detectar bordes y obstáculos, para no sobrecargar el servidor con constantes solicitudes.
+
+RELACIÓN CON DIRECTORIO**
+Para la lista de mapas disponibles, necesitaremos comunicarnos con el directorio, el cual tiene la información:
+
+- Nombre del mapa
+- Capacidad máxima del mapa
+- Cantidad de jugadores actual
+
+Ejemplo de como lo visualizamos desde el cliente:
+
+Nombre-cantidadJugadoresConectados/capacidadMaximaMapa
+"cat2-3/5"
