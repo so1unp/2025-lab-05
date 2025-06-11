@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -24,17 +25,27 @@
 
 
 void mostrar_menu();
-void banderas(int c, int m, int d, int n); // para no pisar 
 
+struct RespuestaConexion respuesta;
+struct SolicitudConexion solicitud;
 
+// la idea es probar
 int main(int argc, char *argv[]) {
-    
-
-
     char buffer[150];
     int opcion;
-    // int mailbox_solicitudes_id, mailbox_movimientos_id;
+    pid_t mi_pid = getpid();
+    int mailbox_solicitudes_id, mailbox_movimientos_id;
+    
+    mailbox_solicitudes_id = msgget(MAILBOX_SOLICITUD_KEY,0666);
+    if (mailbox_solicitudes_id == -1){
+        perror("Error al conectar mailbox solicitud");
+    }
 
+    mailbox_movimientos_id = msgget(MAILBOX_MOVIMIENTO_KEY,0666);
+    if (mailbox_movimientos_id == -1){
+        perror("Error al conectar mailbox respuesta");
+    }
+    
     printf("este es el cliente test %s", argv[0]);
     while (1) {
         clear();
@@ -42,38 +53,34 @@ int main(int argc, char *argv[]) {
 
         printf("\nSeleccione una opción: ");
         if (scanf("%d", &opcion) != 1) {
-            // Limpiar el buffer de entrada si hay error
-            while (getchar() != '\n');
+            while (getchar() != '\n'); // limpiar buffer
             printf(ANSI_RED "Entrada inválida. Intente de nuevo.\n" ANSI_RESET);
             sleep(1);
             continue;
         }
-        // Limpiar el buffer de entrada
-        while (getchar() != '\n');
-
+        while (getchar() != '\n'); // limpiar buffer
 
         switch (opcion) {
         case CONECTAR:
-            struct SolicitudConexion solicitud;
-            solicitud.jugador.pid = getpid();
+            solicitud.jugador.pid = mi_pid;
             printf("Nombre: ");
             fgets(buffer, sizeof(buffer), stdin);
-            buffer[strcspn(buffer, "\n")] = 0; // Quitar \n
+            buffer[strcspn(buffer, "\n")] = 0; // quitar el salto de linea
             strncpy(solicitud.jugador.nombre, buffer, MAX_LONGITUD_NOMBRE_JUGADOR);
-            
+            solicitud.jugador.nombre[MAX_LONGITUD_NOMBRE_JUGADOR - 1] = '\0';
+
             printf("Tipo (R = Raider, G = Guardián): ");
             solicitud.jugador.tipo = getchar();
-            while (getchar() != '\n'); // Limpiar buffer
+            while (getchar() != '\n'); // limpiar buffer
             
-            // TODO: formulario jugador
+            solicitud.mtype = 1; //para que funcione
+
             solicitud.jugador.posicion.fila = -1;
             solicitud.jugador.posicion.columna = -1;
-        
             // Simular claves de mailbox para respuestas y notificaciones
-            solicitud.clave_mailbox_respuestas = 1234;     // Valor de prueba
-            solicitud.clave_mailbox_notificaciones = 5678; // Valor de prueba
-
-            // Mostrar contenido estructurado
+            solicitud.clave_mailbox_respuestas = 12678; // valor de prueba
+            solicitud.clave_mailbox_notificaciones = 23678; // valor de prueba
+            // mostrar contenido 
             printf("\n--- FORMULARIO DE CONEXIÓN ---\n");
             printf("PID: %ld\n", solicitud.jugador.pid);
             printf("Nombre: %s\n", solicitud.jugador.nombre);
@@ -83,10 +90,74 @@ int main(int argc, char *argv[]) {
                    solicitud.jugador.posicion.columna);
             printf("Mailbox respuesta: %d\n", solicitud.clave_mailbox_respuestas);
             printf("Mailbox notificación: %d\n", solicitud.clave_mailbox_notificaciones);
-            printf("--------------------------------\n");
+            printf("--------------------------------\n\n");
+
+            printf("[DEBUG] mailbox_solicitudes_id = %d\n", mailbox_solicitudes_id);
+            printf("[DEBUG] sizeof(solicitud) = %lu\n", sizeof(solicitud));
+            printf("[DEBUG] sizeof(long) = %lu\n", sizeof(long));
+            printf("[DEBUG] mtype = %ld\n", solicitud.mtype);
+            
+            if (msgsnd(mailbox_solicitudes_id,
+                    &solicitud,
+                    sizeof(solicitud) - sizeof(long),
+                    0)== -1) {
+                perror("Error al enviar solicitu de conexion");
+                break;
+            }
+            printf("Solicitud enviada...\n");
+            if (msgrcv(solicitud.clave_mailbox_respuestas,
+                    &respuesta,
+                    sizeof(respuesta) - sizeof(long),
+                    mi_pid, 0) == -1) {
+                perror("Error al recibir respuesta");
+            }
+            else {
+                printf("RESPUESTA DEL SERVIDOR\n");
+                printf("%s\n",respuesta.mensaje);
+                printf("%s\n",respuesta.nombre_memoria_mapa);
+            }
+           
             break;
         case MOVERSE:
-            printf("Movimiento de jugador\n");
+            struct Movimiento movimiento;
+            movimiento.pid_cliente = getpid();
+                
+            // Simulamos posición actual (ejemplo: centro del mapa)
+            struct Posicion actual = {5, 5}; // Esto sería real en producción
+            movimiento.posicion = actual;
+                
+            printf("Movimiento de jugador:\n");
+            printf("\tW(^)\tS(v)\tA(<)\tD(>)\n");
+            printf("Dirección: ");
+            char dir = getchar();
+            while (getchar() != '\n'); // Limpiar buffer
+                
+            // Actualizar posición según dirección
+            switch (dir) {
+                case 'W': case 'w':
+                    movimiento.posicion.fila--;
+                    break;
+                case 'S': case 's':
+                    movimiento.posicion.fila++;
+                    break;
+                case 'A': case 'a':
+                    movimiento.posicion.columna--;
+                    break;
+                case 'D': case 'd':
+                    movimiento.posicion.columna++;
+                    break;
+                default:
+                    printf(ANSI_RED "Dirección inválida. Usa W/A/S/D.\n" ANSI_RESET);
+                    break;
+            }
+        
+            // Mostrar movimiento simulado
+            printf("\n--- MENSAJE DE MOVIMIENTO ---\n");
+            printf("PID: %ld\n", movimiento.pid_cliente);
+            printf("Posición destino: fila=%d, columna=%d\n",
+                   movimiento.posicion.fila,
+                   movimiento.posicion.columna);
+            printf("----------------------------------\n");
             // TODO: enviar movimiento
             break;
         case DESCONECTAR:
@@ -102,7 +173,9 @@ int main(int argc, char *argv[]) {
             sleep(2);
             continue;
         }
-        // Pequeña pausa para poder ver los resultados
+
+        
+       
         printf("Presione Enter para continuar...");
         getchar();
     }
