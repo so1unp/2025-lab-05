@@ -12,6 +12,12 @@
 #define JUGADOR_EXPLORADOR 1
 #define JUGADOR_GUARDIAN 2
 
+struct posicion
+{
+    int posX;
+    int posY;
+};
+
 // Función para saber si una celda es caminable para un tipo de jugador
 static inline int es_caminable(int tipo_jugador, char celda) {
     if (tipo_jugador == JUGADOR_EXPLORADOR) {
