@@ -9,7 +9,7 @@
 #include <ncurses.h>
 #include <unistd.h>
 
-#define DELAY 35000
+#define DELAY 3500
 
 int main(int argc, char *argv[]) {
   int x = 0,

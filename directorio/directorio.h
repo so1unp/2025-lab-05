@@ -48,6 +48,9 @@
 /** @brief Operación: Eliminar una catacumba del directorio */
 #define OP_ELIMINAR 4
 
+/** @brief Operación: Hacer ping de estado del servidor */
+#define OP_PING 4
+
 // ==================== CÓDIGOS DE RESPUESTA ====================
 // Estos códigos indican el resultado de la operación solicitada
 
@@ -75,6 +78,9 @@ struct catacumba
 {
     char nombre[MAX_NOM];     /**< Nombre único identificador de la catacumba */
     char direccion[MAX_RUTA]; /**< Ruta al archivo de memoria compartida de la catacumba */
+    char mailbox[MAX_NOM];    /**< Ruta al mailbox de mensajes de la catacumba */
+    int cantJug;              /**< Cantidad de jugadores en la catacumba */
+    int cantMaxJug;           /**< Cantidad máxima de jugadores permitidos en la catacumba */
 };
 
 /**
