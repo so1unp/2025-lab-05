@@ -5,6 +5,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <string.h>
+#include <stdbool.h>
 #include "directorio.h"
 
 // ==================== PROTOTIPOS DE FUNCIONES ====================
@@ -58,6 +59,16 @@ void RecibirSolicitudes(int *recibido, int mailbox_solicitudes_id, struct solici
  * @param resp Puntero a la estructura de respuesta a enviar
  **/
 void enviarRespuesta(int mailbox_respuestas_id, struct respuesta *resp);
+
+/**
+ * @brief Verifica el estado del servidor
+ *
+ * Esta función comprueba si el servidor de directorio está activo y
+ * funcionando correctamente. En este caso, simplemente retorna true.
+ *
+ * @return true si el servidor está activo, false en caso contrario
+ **/
+bool estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
 
 /**
  * @brief Función principal del servidor de directorio
@@ -300,6 +311,9 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
         if (nombre != NULL && direccion != NULL && mailbox != NULL)
         {
             // Copiar los campos básicos de la catacumba
+            catacumbas[*num_catacumbas].pid = msg->mtype;                      // Asignar el PID del proceso actual
+            printf("   ├─ PID:        %d\n", catacumbas[*num_catacumbas].pid); // DEBUG
+
             strncpy(catacumbas[*num_catacumbas].nombre, nombre, MAX_NOM - 1);
             catacumbas[*num_catacumbas].nombre[MAX_NOM - 1] = '\0';
 
