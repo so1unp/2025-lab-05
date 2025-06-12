@@ -80,6 +80,13 @@ int main(int argc, char *argv[]) {
             // Simular claves de mailbox para respuestas y notificaciones
             solicitud.clave_mailbox_respuestas = 12678; // valor de prueba
             solicitud.clave_mailbox_notificaciones = 23678; // valor de prueba
+
+            solicitud.clave_mailbox_respuestas = msgget(12678, 0666 | IPC_CREAT);
+            if (mailbox_solicitudes_id == -1) {
+                perror("Error al crear el mailbox de solicitudes");
+                exit(EXIT_FAILURE);
+            }
+
             // mostrar contenido 
             printf("\n--- FORMULARIO DE CONEXIÓN ---\n");
             printf("PID: %ld\n", solicitud.jugador.pid);

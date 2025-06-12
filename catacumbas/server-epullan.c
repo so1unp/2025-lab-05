@@ -191,6 +191,7 @@ int main(int argc, char* argv[]) {
             // TODO: espera solicitud conexion.
             solicitudJugador(&recibido,mailbox_solicitudes_id, &solicitud);
   
+            respuesta.mtype = solicitud.jugador.pid;
             if (!ingresarJugador(solicitud.jugador, mapa)){
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Intento fallido, no se conecto jugador");
                 respuesta.clave_mailbox_movimientos = 0;
@@ -201,7 +202,6 @@ int main(int argc, char* argv[]) {
                 // asegurarse que termine bien el nombre.
                 respuesta.nombre_memoria_mapa[sizeof(respuesta.nombre_memoria_mapa) - 1] = '\0';
             }
-            respuesta.mtype = solicitud.jugador.pid;
             responder(solicitud.clave_mailbox_respuestas, &respuesta);
         }
         break;
@@ -356,9 +356,19 @@ void solicitudJugador(int *recibido, int mailbox_solicitudes_id, struct Solicitu
 }
 
 void responder(int mailbox_respuestas_id, struct RespuestaConexion *respuesta){
-    // algo
+ 
+    if (msgsnd(mailbox_respuestas_id, respuesta, sizeof(struct RespuestaConexion) - sizeof(long), 0) == -1) {
+        perror("Error al enviar respuesta");
+    } else {
+        printf("Respuesta enviada al cliente PID %ld\n", respuesta->mtype);
+    }
 }
 
+void handler(int signal) {
+    printf("Finalizando servidor...\n");
+    // Liberar memoria compartida, cerrar descriptores, etc.
+    exit(EXIT_SUCCESS);
+}
 
 // AGREGAR
 // semaforos para gestionar el acceso a la memoria compartida. <- ? 
