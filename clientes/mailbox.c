@@ -1,22 +1,19 @@
-#include <ncurses.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <ncurses.h>
 #include "../directorio/directorio.h"
-
-#define ESTADO 1
 
 int main()
 {
     int mailbox_respuestas_id;
-    struct solicitud mensaje;
-    int status[ESTADO];
+    struct respuesta resp;
+    pid_t mi_pid = getpid();
 
+    // se conecta al mailbox de respuestas
     mailbox_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0666);
     if (mailbox_respuestas_id == -1)
     {
@@ -24,13 +21,31 @@ int main()
         return 1;
     }
 
-    if (msgrcv(&status, mailbox_respuestas_id, &mensaje) == -1) //va a fallar, faltaria implementar el codigo e el servidor
+    if (msgrcv(mailbox_respuestas_id, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1)
     {
-        perror("Error al recibir mensaje");
-        return 1;
+        {
+            perror("Error al recibir resp");
+            return 1;
+        }
+
+        printf("Codigo de respuesta: %d\n", resp.codigo);
+        printf("Mensaje: %s\n", resp.datos);
+
+        return EXIT_SUCCESS;
     }
+}
+void ejemplo()
+{
+    int pid_del_jugador;
+    int RESP_GAME_OVER;
+    int mailbox_respuestas_id;
+    
+    // lo que tendria q hacer ma o meno el servidor para enviarnos el mensaje
+    struct respuesta resp;
+    resp.mtype = pid_del_jugador;                   // PID del cliente (jugador) al que va dirigido el mensaje
+    resp.codigo = RESP_GAME_OVER;                   // Eestado: GAME_OVER
+    strcpy(resp.datos, "Te atraparon! Game Over."); // mensaje q se enviaria al cliente
 
-
- //mostrar estado del servidor, ?mostrar notificaciones? porq el estado?
-    return 0;
+    // se envia el mensaje a la cola de respuestas
+    msgsnd(mailbox_respuestas_id, &resp, sizeof(resp) - sizeof(long), 0);
 }
