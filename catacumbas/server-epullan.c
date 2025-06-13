@@ -24,31 +24,41 @@
 #define ANSI_YELLOW  "\x1b[33m"
 #define ANSI_BLUE    "\x1b[34m"
 
+#define PERMISOS 0664
 
 // =========================
-//    FUNCIONES AUXILIARES
+//  FUNCIONES AUXILIARES
 // =========================
 void usage(char *argv[]);
 void fatal(char msg[]);
 void mostrarMapa(char mapa[FILAS][COLUMNAS]);
-void handler(int signal);// TODO: implementar un handler para interrumpir la atencion.
+void handler(int signal);
+void verificarArgumentos(int argc, char* argv[]);
 
 // =========================
-//      FUNCIONES DE MAPA Y TESOROS
+// FUNCIONES DE MAPA Y TESOROS
 // =========================
 void designArena(char mapa[FILAS][COLUMNAS]);
 void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]);
 long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
 
 // =========================
-//      FUNCIONES DE MENSAJERIA
+//  FUNCIONES DE MENSAJERIA
 // =========================
 void solicitudJugador(int *recibido, int mailbox_solicitudes_id, struct SolicitudConexion *solicitud);
 void responder(int mailbox_respuestas_id, struct RespuestaConexion *respuesta);
 void recibirAccion();
 
 // =========================
-//      VARIABLES GLOBALES
+// FUNCIONES DE CONFIGURACION
+// =========================
+void conectarMailbox(int *mailbox_solicitudes_id, int *mailbox_movimientos_id);
+void nombresMemoria(char *nombremapa,size_t size_mmapa, char *nombreestado, size_t size_mestado, int catacumba_id);
+void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,int *shm_mapa_fd, int *shm_estado_fd,int crear);
+void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre);
+
+// =========================
+//     VARIABLES GLOBALES
 // =========================
 struct Tesoro tesoros[MAX_TESOROS];
 struct Jugador jugadores[MAX_JUGADORES];
@@ -75,78 +85,48 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    
     int mailbox_solicitudes_id, mailbox_movimientos_id;
+    int size_mapa, size_estado;
     int recibido;
 
-    mailbox_solicitudes_id = msgget(MAILBOX_SOLICITUD_KEY, 0666 | IPC_CREAT);
-    if (mailbox_solicitudes_id == -1) {
-        perror("Error al crear el mailbox de solicitudes");
-        exit(EXIT_FAILURE);
-    }
-    mailbox_movimientos_id = msgget(MAILBOX_MOVIMIENTO_KEY, 0666 | IPC_CREAT);
-    if (mailbox_movimientos_id == -1) {
-        perror("Error al crear el mailbox de respuestas");
-        exit(EXIT_FAILURE);
-    }
+    signal(SIGINT,handler);
+    conectarMailbox(&mailbox_solicitudes_id, &mailbox_movimientos_id);
 
     int catacumba_id = atoi(argv[argc-1]);
-    if (catacumba_id < 0 || catacumba_id >= TOTAL_CATACUMBAS) fatal("Número de catacumba inválido");
+    if (catacumba_id < 0 || catacumba_id >= TOTAL_CATACUMBAS)
+        fatal("Número de catacumba inválido");
     
-    int size_mapa = sizeof(char) * FILAS * COLUMNAS;
-    int size_estado = sizeof(struct Estado);
+    size_mapa = sizeof(char) * FILAS * COLUMNAS;
+    size_estado = sizeof(struct Estado);
     
     // =============================
     //    INICIALIZAR SHM_NAME
     // =============================
-
     char shm_mapa_nombre[128];
     char shm_estado_nombre[128];
-
-    snprintf(shm_mapa_nombre, sizeof(shm_mapa_nombre), 
-        SHM_MAPA_PREFIX "%s", catacumbas[catacumba_id]);
-    snprintf(shm_estado_nombre, sizeof(shm_estado_nombre), 
-        SHM_ESTADO_PREFIX "%s", catacumbas[catacumba_id]);
-
+    nombresMemoria(shm_mapa_nombre, sizeof(shm_mapa_nombre),
+        shm_estado_nombre, sizeof(shm_estado_nombre),
+        catacumba_id);
     int shm_mapa_fd, shm_estado_fd;
 
     char option = argv[1][1];
     switch (option) {
     case 'c':
-        if (argc < 3) {
-            usage(argv);
-            exit(EXIT_FAILURE);
-        }
-        srand(catacumba_id);
-        printf ("Va a crear la catacumba '%s'\n",catacumbas[catacumba_id]);
+        verificarArgumentos(argc, argv);
+        srand(catacumba_id*1000);
+        printf ("Va a crear la catacumba '%s'\n",
+             catacumbas[catacumba_id]);
 
-        shm_mapa_fd = 
-        shm_open(shm_mapa_nombre,
-             O_CREAT | O_RDWR | O_EXCL, 0664);
-        if (shm_mapa_fd == -1) fatal("Error creando shm mapa");
-        if (ftruncate(shm_mapa_fd, size_mapa) == -1) fatal("Error truncando shm mapa");
-
-        mapa = mmap(NULL,
-             size_mapa, PROT_READ | PROT_WRITE, MAP_SHARED, shm_mapa_fd, 0);
-        if (mapa == MAP_FAILED) fatal("Error mapeando shm mapa");
-
-        shm_estado_fd = 
-            shm_open(shm_estado_nombre,
-                 O_CREAT | O_RDWR | O_EXCL, 0664);
-        if (shm_estado_fd == -1) fatal("Error creando shm estado");
-        if (ftruncate(shm_estado_fd, size_estado) == -1) fatal("Error truncando shm estado");
-
-        estado =  mmap(NULL,
-            size_estado, PROT_READ | PROT_WRITE, MAP_SHARED, shm_estado_fd, 0);
-        if (estado == MAP_FAILED) fatal("Error mapeando shm estado");
+        abrirMemoria(shm_mapa_nombre, shm_estado_nombre,
+             &shm_mapa_fd, &shm_estado_fd, 1); // 1 porque crea
 
         designArena(mapa);
         generarTesoros(tesoros, mapa);
         memset(estado, 0, sizeof(struct Estado));
         estado->max_jugadores = MAX_JUGADORES;
 
-        printf("Servidor listo para catacumba '%s'. Presiona Enter para salir...\n",
-             catacumbas[catacumba_id]);
+        printf("Servidor listo para catacumba '%s'."
+            " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
         munmap(mapa, size_mapa);
@@ -156,71 +136,62 @@ int main(int argc, char* argv[]) {
 
         break;
     case 'b':
-        if (argc < 3) {
-            usage(argv);
-            exit(EXIT_FAILURE);
-        }
+        verificarArgumentos(argc, argv);
 
-        printf("Va a borrar la catacumba '%s'\n", catacumbas[catacumba_id]);
+        printf("Va a borrar la catacumba '%s'\n",
+             catacumbas[catacumba_id]);
 
-        if (shm_unlink(shm_mapa_nombre) < 0) fatal("Error al borrar memoria mapa");
-        if (shm_unlink(shm_estado_nombre) < 0) fatal("Error al borrar memoria estado");
+        borrarMemoria(shm_mapa_nombre,shm_estado_nombre);
 
-        printf("Se ha eliminado la catacumba '%s'. Presiona Enter para salir...\n", catacumbas[catacumba_id]);
+        printf("Se ha eliminado la catacumba '%s'."
+            " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
         break;
-    //
-    // PRIMER CASO EL JUGADOR SE CONECTA
     case 'a':
-    
-        shm_mapa_fd = shm_open(shm_mapa_nombre, O_RDWR, 0);
-        if (shm_mapa_fd == -1) fatal("No se pudo abrir shm mapa");
-        
-        mapa = mmap(NULL, size_mapa, PROT_READ|PROT_WRITE,  MAP_SHARED, shm_mapa_fd, 0);
-        if (mapa == MAP_FAILED) fatal("No se pudo mapear shm mapa");
-        
-        shm_estado_fd = shm_open(shm_estado_nombre, O_RDWR, 0);
-        if (shm_estado_fd == -1) fatal("No se pudo abrir shm estado");
-        
-        estado = mmap(NULL, size_estado, PROT_READ|PROT_WRITE, MAP_SHARED, shm_estado_fd, 0);
-        if (estado == MAP_FAILED) fatal("No se pudo mapear shm estado");
-    
-        printf("Servidor de catacumba '%s' esperando solicitudes \n", catacumbas[catacumba_id]);
+        verificarArgumentos(argc, argv);
+
+        abrirMemoria(shm_mapa_nombre, shm_estado_nombre,
+             &shm_mapa_fd, &shm_estado_fd, 0); // solo abre
+
+        printf("Servidor de catacumba '%s' esperando solicitudes \n",
+             catacumbas[catacumba_id]);
         while (1) { 
             // TODO: espera solicitud conexion.
-            solicitudJugador(&recibido,mailbox_solicitudes_id, &solicitud);
+            solicitudJugador(&recibido, mailbox_solicitudes_id,
+                 &solicitud);
   
             respuesta.mtype = solicitud.jugador.pid;
             if (!ingresarJugador(solicitud.jugador, mapa)){
-                snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Intento fallido, no se conecto jugador");
+                snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                     "Intento fallido, no se conecto jugador");
                 respuesta.clave_mailbox_movimientos = 0;
             }  else {
-                snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Jugador conectado con éxito");                respuesta.clave_mailbox_movimientos = MAILBOX_MOVIMIENTO_KEY;
-                strncpy(respuesta.nombre_memoria_mapa, shm_mapa_nombre, 
-                    sizeof(respuesta.nombre_memoria_mapa));
+                snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                     "Jugador conectado con éxito");
+                respuesta.clave_mailbox_movimientos =
+                     MAILBOX_MOVIMIENTO_KEY;
+                strncpy(respuesta.nombre_memoria_mapa, shm_mapa_nombre,
+                     sizeof(respuesta.nombre_memoria_mapa));
                 // asegurarse que termine bien el nombre.
-                respuesta.nombre_memoria_mapa[sizeof(respuesta.nombre_memoria_mapa) - 1] = '\0';
+                respuesta.nombre_memoria_mapa[sizeof(
+                    respuesta.nombre_memoria_mapa) - 1] = '\0';
             }
             responder(solicitud.clave_mailbox_respuestas, &respuesta);
         }
         break;
     case 'm':
-        if (argc < 3) {
-            usage(argv);
-            exit(EXIT_FAILURE);
-        }
-        printf("Va a mostrar la catacumba '%s'\n", catacumbas[catacumba_id]);
-        shm_mapa_fd = shm_open(shm_mapa_nombre, O_RDONLY, 0);
-        if (shm_mapa_fd == -1) fatal("No se pudo abrir shm mapa");
+        verificarArgumentos(argc, argv);
+        printf("Va a mostrar la catacumba '%s'\n",
+             catacumbas[catacumba_id]);
 
-        mapa = mmap(NULL, size_mapa, PROT_READ, MAP_SHARED, shm_mapa_fd, 0);
-        if (mapa == MAP_FAILED) fatal("No se pudo mapear shm mapa");
+        abrirMemoria(shm_mapa_nombre, shm_estado_nombre,
+             &shm_mapa_fd, &shm_estado_fd, 0);
 
         mostrarMapa(mapa);
 
-        printf("Se ha visualizado la catacumba '%s'. Presiona Enter para salir...\n",
-             catacumbas[catacumba_id]);
+        printf("Se visualizo la catacumba '%s'."
+            " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
         munmap(mapa, size_mapa);
@@ -257,34 +228,6 @@ void fatal(char msg[]) {
     exit(EXIT_FAILURE);
 }
 
-void designArena(char mapa[FILAS][COLUMNAS]) {
-    int i, j;
-    for (i = 0; i < FILAS; ++i) {
-        for (j = 0; j < COLUMNAS; ++j) {
-            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1) {
-                mapa[i][j] = -1;
-            } else { 
-                mapa[i][j] = (rand() % 10 < 2) ? -1 : 0;
-            }
-        }
-    }
-}
-
-void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) { 
-    int fila, columna, i, libre;
-    for (i = 0; i < MAX_TESOROS; i++) {
-        do {
-            libre = 1;
-            fila = 1 + rand() % (FILAS-2);
-            columna = 1 + rand() % (COLUMNAS-2);
-            if (mapa[fila][columna] != 0) libre = 0;
-        } while (!libre);
-        mapa[fila][columna] = i + TESORO_OFFSET;
-        tesoros[i].id = i + TESORO_OFFSET;
-        tesoros[i].posicion = (struct Posicion){fila, columna};
-    }
-}
-
 
 // saber que se dibujo
 void mostrarMapa(char mapa[FILAS][COLUMNAS]) {
@@ -300,7 +243,8 @@ void mostrarMapa(char mapa[FILAS][COLUMNAS]) {
                 color = ANSI_BLUE;
             } else if (mapa[i][j] == VACIO) {
                 c = ' ';  
-            } else if (mapa[i][j] >= TESORO_OFFSET && mapa[i][j] <= MAX_TESOROS) {
+            } else if (mapa[i][j] >= TESORO_OFFSET 
+                && mapa[i][j] <= MAX_TESOROS) {
                 c = '$';  
                 color = ANSI_YELLOW;
             } else {
@@ -316,7 +260,47 @@ void mostrarMapa(char mapa[FILAS][COLUMNAS]) {
     printf("===========================\n");
 }
 
+void handler(int signal) {
+    printf("Finalizando servidor...\n");
+    exit(EXIT_SUCCESS);
+}
 
+void verificarArgumentos(int argc, char* argv[]){
+    if (argc < 3) {
+        usage(argv);
+        exit(EXIT_FAILURE);
+    }
+}
+
+void designArena(char mapa[FILAS][COLUMNAS]) {
+    int i, j;
+    for (i = 0; i < FILAS; ++i) {
+        for (j = 0; j < COLUMNAS; ++j) {
+            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1) {
+                mapa[i][j] = -1;
+            } else { 
+                mapa[i][j] = (rand() % 10 < 2) ? -1 : 0;
+            }
+        }
+    }
+}
+
+void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
+    int fila, columna, i, libre;
+    for (i = 0; i < MAX_TESOROS; i++) {
+        do {
+            libre = 1;
+            fila = 1 + rand() % (FILAS-2);
+            columna = 1 + rand() % (COLUMNAS-2);
+            if (mapa[fila][columna] != 0) libre = 0;
+        } while (!libre);
+        mapa[fila][columna] = i + TESORO_OFFSET;
+        tesoros[i].id = i + TESORO_OFFSET;
+        tesoros[i].posicion = (struct Posicion){fila, columna};
+    }
+}
+
+// TODO: mejorar logica de posicion jugador
 long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
     if (estado->cant_jugadores >= estado->max_jugadores) {
         printf("No hay más espacio para jugadores.\n");
@@ -331,11 +315,11 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
                 jugadores[idx].posicion.fila = i;
                 jugadores[idx].posicion.columna = j;
                 mapa[i][j] = jugador.tipo;
-
                 estado->cant_jugadores++;
 
-                printf("Jugador conectado: %s (PID: %ld, tipo: %c) en (%d,%d)\n",
-                       jugador.nombre, jugador.pid, jugador.tipo, i, j);
+                printf("Jugador registrado: "
+                    "%s (PID: %ld, tipo: %c) en (%d,%d)\n",
+                    jugador.nombre, jugador.pid, jugador.tipo, i, j);
                 return jugador.pid;
             }
         }
@@ -345,7 +329,9 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
 }
 
 
-void solicitudJugador(int *recibido, int mailbox_solicitudes_id, struct SolicitudConexion *solicitud) {
+void solicitudJugador(int *recibido, int mailbox_solicitudes_id,
+     struct SolicitudConexion *solicitud) {
+
     printf("Esperando nuevas solicitudes de conexion...\n");
     *recibido = msgrcv(mailbox_solicitudes_id, solicitud,
          sizeof(struct SolicitudConexion) - sizeof(long), 0, 0);
@@ -355,23 +341,80 @@ void solicitudJugador(int *recibido, int mailbox_solicitudes_id, struct Solicitu
     }
 }
 
-void responder(int mailbox_respuestas_id, struct RespuestaConexion *respuesta){
+void responder(int mailbox_respuestas_id,
+     struct RespuestaConexion *respuesta) {
  
-    if (msgsnd(mailbox_respuestas_id, respuesta, sizeof(struct RespuestaConexion) - sizeof(long), 0) == -1) {
+    if (msgsnd(mailbox_respuestas_id, respuesta,
+         sizeof(struct RespuestaConexion) - sizeof(long), 0) == -1) {
         perror("Error al enviar respuesta");
     } else {
-        printf("Respuesta enviada al cliente PID %ld\n", respuesta->mtype);
+        printf("Respuesta enviada al cliente PID %ld\n",
+            respuesta->mtype);
     }
 }
 
-void handler(int signal) {
-    printf("Finalizando servidor...\n");
-    // Liberar memoria compartida, cerrar descriptores, etc.
-    exit(EXIT_SUCCESS);
+void conectarMailbox(int *mailbox_solicitudes_id, 
+        int *mailbox_movimientos_id) {
+    *mailbox_solicitudes_id = msgget(   
+        MAILBOX_SOLICITUD_KEY, 0666 | IPC_CREAT);
+    if (*mailbox_solicitudes_id == -1) {
+        perror("Error al crear el mailbox de solicitudes");
+        exit(EXIT_FAILURE);
+    }
+    *mailbox_movimientos_id = msgget(
+            MAILBOX_MOVIMIENTO_KEY, 0666 | IPC_CREAT);
+    if (*mailbox_movimientos_id == -1) {
+        perror("Error al crear el mailbox de respuestas");
+        exit(EXIT_FAILURE);
+    }
 }
 
-// AGREGAR
-// semaforos para gestionar el acceso a la memoria compartida. <- ? 
-// modificar e incrementar la comunicacion con los componentes de cliente y directorio
-// >> mensajes
-// >> memoria compartida
+
+void nombresMemoria(char *nombremapa, size_t size_mmapa, char *nombreestado,
+     size_t size_mestado, int catacumba_id) {
+    snprintf(nombremapa, size_mmapa, 
+        SHM_MAPA_PREFIX "%s", catacumbas[catacumba_id]);
+    snprintf(nombreestado, size_mestado, 
+        SHM_ESTADO_PREFIX "%s", catacumbas[catacumba_id]);
+}
+
+// Abre o crea el espacio de memoria compartida, segun el valor de crear
+void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
+            int *shm_mapa_fd, int *shm_estado_fd,int crear) {
+
+    int flags = O_RDWR; // solo lectura
+    if (crear) flags |= O_CREAT | O_EXCL; // crear si no existe
+    int size_mapa = sizeof(char) * FILAS * COLUMNAS;
+    int size_estado = sizeof(struct Estado);
+
+    //  abre o crea memoria compartida de mapa
+    *shm_mapa_fd = shm_open(shm_mapa_nombre, flags, PERMISOS);
+    if (*shm_mapa_fd == -1) fatal(crear? 
+        "Error creando shm mapa":"No se pudo abrir shm mapa");
+    // si esta creando, intenta truncar
+    if (crear && ftruncate(*shm_mapa_fd, size_mapa) == -1)
+        fatal("Error truncando shm mapa");
+    
+    mapa = mmap(NULL, size_mapa, PROT_READ|PROT_WRITE,  MAP_SHARED, 
+        *shm_mapa_fd, 0);
+    if (mapa == MAP_FAILED) fatal("No se pudo mapear shm mapa");
+    
+    //  abre o crea memoria compartida de estado 
+    *shm_estado_fd = shm_open(shm_estado_nombre, flags, PERMISOS);
+    if (*shm_estado_fd == -1) fatal(crear? 
+        "Error creando shm estado":"No se pudo abrir shm estado");
+    // si esta creando, intenta truncar
+    if (crear && ftruncate(*shm_estado_fd, size_estado) == -1)
+        fatal("Error truncando shm estado");
+    
+    estado = mmap(NULL, size_estado, PROT_READ|PROT_WRITE, MAP_SHARED, 
+        *shm_estado_fd, 0);
+    if (estado == MAP_FAILED) fatal("No se pudo mapear shm estado");
+}
+
+void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre) {
+    if (shm_unlink(shm_mapa_nombre) < 0) 
+        fatal("Error al borrar memoria mapa");
+    if (shm_unlink(shm_estado_nombre) < 0) 
+        fatal("Error al borrar memoria estado");
+}

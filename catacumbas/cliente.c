@@ -12,7 +12,6 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <time.h>
-#include "catacumbas.h"
 
 // son de prueba
 #define ANSI_RESET   "\x1b[0m"
@@ -82,8 +81,8 @@ int main(int argc, char *argv[]) {
             solicitud.clave_mailbox_notificaciones = 23678; // valor de prueba
 
             solicitud.clave_mailbox_respuestas = msgget(12678, 0666 | IPC_CREAT);
-            if (mailbox_solicitudes_id == -1) {
-                perror("Error al crear el mailbox de solicitudes");
+            if (solicitud.clave_mailbox_respuestas == -1) {
+                perror("Error al crear el mailbox de respuesta");
                 exit(EXIT_FAILURE);
             }
 
@@ -98,12 +97,6 @@ int main(int argc, char *argv[]) {
             printf("Mailbox respuesta: %d\n", solicitud.clave_mailbox_respuestas);
             printf("Mailbox notificación: %d\n", solicitud.clave_mailbox_notificaciones);
             printf("--------------------------------\n\n");
-
-            printf("[DEBUG] mailbox_solicitudes_id = %d\n", mailbox_solicitudes_id);
-            printf("[DEBUG] sizeof(solicitud) = %lu\n", sizeof(solicitud));
-            printf("[DEBUG] sizeof(long) = %lu\n", sizeof(long));
-            printf("[DEBUG] mtype = %ld\n", solicitud.mtype);
-            
             if (msgsnd(mailbox_solicitudes_id,
                     &solicitud,
                     sizeof(solicitud) - sizeof(long),
@@ -180,8 +173,6 @@ int main(int argc, char *argv[]) {
             sleep(2);
             continue;
         }
-
-        
        
         printf("Presione Enter para continuar...");
         getchar();
