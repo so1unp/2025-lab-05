@@ -105,4 +105,30 @@ struct Notificacion {
     char mensaje[MAX_LONGITUD_MENSAJES];
 };
 
+
+// Para comunicación con clientes
+// Puede cambiar segun lo que Cliente haga o tenga
+struct SolicitudServidor {
+    long mtype;
+    int codigo; // ponerse de acuerdo con cliente y directorio para los códigos
+    int clave_mailbox_respuestas; //mailbox del cliente
+    struct Jugador jugador;
+};
+
+struct RespuestaServidor {
+    long mtype;
+    int codigo;
+    char mensaje[MAX_LONGITUD_MENSAJES];
+};
+
+// Para comunicación con el directorio (Robado de directorio.h)
+#define MAX_TEXT 100
+struct solicitud
+{
+    long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
+    int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
+    char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
+};
+
+
 #endif

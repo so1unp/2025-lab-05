@@ -1,3 +1,4 @@
+// PROGRAMA EJEMPLO DE SERVIDOR
 // Convenciones de valores en el mapa:
 // -1 → pared
 //  0 → celda libre
@@ -45,9 +46,13 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
 // =========================
 //  FUNCIONES DE MENSAJERIA
 // =========================
-void solicitudJugador(int *recibido, int mailbox_solicitudes_id, struct SolicitudConexion *solicitud);
-void responder(int mailbox_respuestas_id, struct RespuestaConexion *respuesta);
-void recibirAccion();
+void solicitudJugador(int mailbox_solicitudes_id, struct SolicitudServidor *solicitud);
+void responderJugador(int mailbox_respuestas_id, struct RespuestaServidor *respuesta);
+
+// TODO: un hilo que se encargue de la atencion de directorio
+void solicitudDirectorio(int *recibido, int mailbox_solicitudes_id, struct solicitud *solicitud);
+
+
 
 // =========================
 // FUNCIONES DE CONFIGURACION
@@ -66,8 +71,9 @@ char (*mapa)[COLUMNAS];
 struct Estado *estado;
 struct Jugador* jugador;
 
-struct RespuestaConexion respuesta;
-struct SolicitudConexion solicitud;
+struct SolicitudServidor solicitud;
+struct RespuestaServidor respuesta;
+
 
 // server:
 // - manejo de memoria compartida
@@ -150,6 +156,7 @@ int main(int argc, char* argv[]) {
         break;
     case 'a':
         verificarArgumentos(argc, argv);
+        int clave_mailbox_respuestas;
 
         abrirMemoria(shm_mapa_nombre, shm_estado_nombre,
              &shm_mapa_fd, &shm_estado_fd, 0); // solo abre
@@ -157,27 +164,23 @@ int main(int argc, char* argv[]) {
         printf("Servidor de catacumba '%s' esperando solicitudes \n",
              catacumbas[catacumba_id]);
         while (1) { 
-            // TODO: espera solicitud conexion.
-            solicitudJugador(&recibido, mailbox_solicitudes_id,
+            solicitudJugador(mailbox_solicitudes_id,
                  &solicitud);
-  
+
+            clave_mailbox_respuestas = solicitud.clave_mailbox_respuestas;
             respuesta.mtype = solicitud.jugador.pid;
-            if (!ingresarJugador(solicitud.jugador, mapa)){
+
+            if (solicitud.codigo == CONECTAR &&
+                 !ingresarJugador(solicitud.jugador, mapa)) {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Intento fallido, no se conecto jugador");
-                respuesta.clave_mailbox_movimientos = 0;
+                respuesta.codigo = 0;
             }  else {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Jugador conectado con éxito");
-                respuesta.clave_mailbox_movimientos =
-                     MAILBOX_MOVIMIENTO_KEY;
-                strncpy(respuesta.nombre_memoria_mapa, shm_mapa_nombre,
-                     sizeof(respuesta.nombre_memoria_mapa));
-                // asegurarse que termine bien el nombre.
-                respuesta.nombre_memoria_mapa[sizeof(
-                    respuesta.nombre_memoria_mapa) - 1] = '\0';
+                respuesta.codigo = 1;
             }
-            responder(solicitud.clave_mailbox_respuestas, &respuesta);
+            responderJugador(clave_mailbox_respuestas, &respuesta);
         }
         break;
     case 'm':
@@ -329,20 +332,20 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
 }
 
 
-void solicitudJugador(int *recibido, int mailbox_solicitudes_id,
-     struct SolicitudConexion *solicitud) {
-
+void solicitudJugador(int mailbox_solicitudes_id,
+     struct SolicitudServidor *solicitud) {
+    int recibido;
     printf("Esperando nuevas solicitudes de conexion...\n");
-    *recibido = msgrcv(mailbox_solicitudes_id, solicitud,
+    recibido = msgrcv(mailbox_solicitudes_id, solicitud,
          sizeof(struct SolicitudConexion) - sizeof(long), 0, 0);
-    if (*recibido == -1) {
+    if (recibido == -1) {
         perror("Error al recibir solicitud");
         return;
     }
 }
 
-void responder(int mailbox_respuestas_id,
-     struct RespuestaConexion *respuesta) {
+void responderJugador(int mailbox_respuestas_id,
+     struct RespuestaServidor *respuesta) {
  
     if (msgsnd(mailbox_respuestas_id, respuesta,
          sizeof(struct RespuestaConexion) - sizeof(long), 0) == -1) {
