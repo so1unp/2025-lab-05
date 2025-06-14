@@ -1,4 +1,4 @@
-// PROGRAMA EJEMPLO DE SERVIDOR
+// ESTE PROGRAMA ES EJEMPLO DE SERVIDOR
 // Convenciones de valores en el mapa:
 // -1 → pared
 //  0 → celda libre
@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <time.h>
 #include "catacumbas.h"
+#include "directorio.h"
 
 // son de prueba
 #define ANSI_RESET   "\x1b[0m"
@@ -41,7 +42,13 @@ void verificarArgumentos(int argc, char* argv[]);
 // =========================
 void designArena(char mapa[FILAS][COLUMNAS]);
 void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]);
+
+// TODO: mejorar logica de posicionamiento del jugador,
+// considerar otros jugadores y el tipo de jugador
 long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
+
+// TODO: comparar y actualizar posicion de jugador en Jugadores y Mapa
+void movimientoJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
 
 // =========================
 //  FUNCIONES DE MENSAJERIA
@@ -49,17 +56,18 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
 void solicitudJugador(int mailbox_solicitudes_id, struct SolicitudServidor *solicitud);
 void responderJugador(int mailbox_respuestas_id, struct RespuestaServidor *respuesta);
 
-// TODO: un hilo que se encargue de la atencion de directorio
-void solicitudDirectorio(int *recibido, int mailbox_solicitudes_id, struct solicitud *solicitud);
-
-
+// TODO: un hilo que se encargue solo de la atencion de directorio
+void *hiloDirectorio();// se crea un hilo dedicado exclusivamente a la atencion de solicitudes del directorio.
+void solicitudDirectorio(int mailbox_solicitudes_id, struct solicitud *solicitud);
+void responderDirectorio(int mailbox_repuestas_id, struct respuesta *respuesta);
 
 // =========================
 // FUNCIONES DE CONFIGURACION
 // =========================
-void conectarMailbox(int *mailbox_solicitudes_id, int *mailbox_movimientos_id);
-void nombresMemoria(char *nombremapa,size_t size_mmapa, char *nombreestado, size_t size_mestado, int catacumba_id);
-void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,int *shm_mapa_fd, int *shm_estado_fd,int crear);
+void conectarMailbox();
+void nombresMemoria(char *shm_mapa_nombre,size_t size_mmapa, char *shm_estado_nombre, size_t size_mestado, int catacumba_id);
+void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre, int *shm_mapa_fd, int *shm_estado_fd,int crear);
+void cerrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre, int *shm_mapa_fd, int *shm_estado_fd);
 void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre);
 
 // =========================
@@ -74,6 +82,8 @@ struct Jugador* jugador;
 struct SolicitudServidor solicitud;
 struct RespuestaServidor respuesta;
 
+int mailbox_solicitudes_id;
+int size_mapa, size_estado;
 
 // server:
 // - manejo de memoria compartida
@@ -91,12 +101,10 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    int mailbox_solicitudes_id, mailbox_movimientos_id;
     int size_mapa, size_estado;
-    int recibido;
 
     signal(SIGINT,handler);
-    conectarMailbox(&mailbox_solicitudes_id, &mailbox_movimientos_id);
+    conectarMailbox();
 
     int catacumba_id = atoi(argv[argc-1]);
     if (catacumba_id < 0 || catacumba_id >= TOTAL_CATACUMBAS)
@@ -146,15 +154,13 @@ int main(int argc, char* argv[]) {
 
         printf("Va a borrar la catacumba '%s'\n",
              catacumbas[catacumba_id]);
-
         borrarMemoria(shm_mapa_nombre,shm_estado_nombre);
-
         printf("Se ha eliminado la catacumba '%s'."
             " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
         break;
-    case 'a':
+    case 'a': // atender a los clientes
         verificarArgumentos(argc, argv);
         int clave_mailbox_respuestas;
 
@@ -174,11 +180,11 @@ int main(int argc, char* argv[]) {
                  !ingresarJugador(solicitud.jugador, mapa)) {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Intento fallido, no se conecto jugador");
-                respuesta.codigo = 0;
+                respuesta.codigo = ERROR;
             }  else {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Jugador conectado con éxito");
-                respuesta.codigo = 1;
+                respuesta.codigo = OK;
             }
             responderJugador(clave_mailbox_respuestas, &respuesta);
         }
@@ -198,7 +204,9 @@ int main(int argc, char* argv[]) {
         getchar();
 
         munmap(mapa, size_mapa);
+        munmap(estado, size_estado);
         close(shm_mapa_fd);
+        close(shm_estado_fd);
         break;
     case 'h':
         usage(argv);
@@ -303,7 +311,6 @@ void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
     }
 }
 
-// TODO: mejorar logica de posicion jugador
 long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
     if (estado->cant_jugadores >= estado->max_jugadores) {
         printf("No hay más espacio para jugadores.\n");
@@ -332,23 +339,25 @@ long ingresarJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
 }
 
 
+
+
 void solicitudJugador(int mailbox_solicitudes_id,
      struct SolicitudServidor *solicitud) {
-    int recibido;
+
     printf("Esperando nuevas solicitudes de conexion...\n");
-    recibido = msgrcv(mailbox_solicitudes_id, solicitud,
-         sizeof(struct SolicitudConexion) - sizeof(long), 0, 0);
-    if (recibido == -1) {
+    if (msgrcv(mailbox_solicitudes_id, solicitud,
+        sizeof(struct SolicitudConexion) - sizeof(long), 0, 0) == -1) {
         perror("Error al recibir solicitud");
         return;
     }
 }
 
+// responder al cliente
 void responderJugador(int mailbox_respuestas_id,
      struct RespuestaServidor *respuesta) {
  
     if (msgsnd(mailbox_respuestas_id, respuesta,
-         sizeof(struct RespuestaConexion) - sizeof(long), 0) == -1) {
+         sizeof(struct RespuestaServidor) - sizeof(long), 0) == -1) {
         perror("Error al enviar respuesta");
     } else {
         printf("Respuesta enviada al cliente PID %ld\n",
@@ -356,32 +365,27 @@ void responderJugador(int mailbox_respuestas_id,
     }
 }
 
-void conectarMailbox(int *mailbox_solicitudes_id, 
-        int *mailbox_movimientos_id) {
-    *mailbox_solicitudes_id = msgget(   
+// conectar o crear mailbox
+void conectarMailbox() {
+    mailbox_solicitudes_id = msgget(   
         MAILBOX_SOLICITUD_KEY, 0666 | IPC_CREAT);
-    if (*mailbox_solicitudes_id == -1) {
+    if (mailbox_solicitudes_id == -1) {
         perror("Error al crear el mailbox de solicitudes");
         exit(EXIT_FAILURE);
     }
-    *mailbox_movimientos_id = msgget(
-            MAILBOX_MOVIMIENTO_KEY, 0666 | IPC_CREAT);
-    if (*mailbox_movimientos_id == -1) {
-        perror("Error al crear el mailbox de respuestas");
-        exit(EXIT_FAILURE);
-    }
 }
 
-
-void nombresMemoria(char *nombremapa, size_t size_mmapa, char *nombreestado,
+// nombramiento de los espacios de memoria:
+// concatena un prefijo con el nombre de la catacumba
+void nombresMemoria(char *shm_mapa_nombre, size_t size_mmapa, char *shm_estado_nombre,
      size_t size_mestado, int catacumba_id) {
-    snprintf(nombremapa, size_mmapa, 
+    snprintf(shm_mapa_nombre, size_mmapa, 
         SHM_MAPA_PREFIX "%s", catacumbas[catacumba_id]);
-    snprintf(nombreestado, size_mestado, 
+    snprintf(shm_estado_nombre, size_mestado, 
         SHM_ESTADO_PREFIX "%s", catacumbas[catacumba_id]);
 }
 
-// Abre o crea el espacio de memoria compartida, segun el valor de crear
+// abre o crea el espacio de memoria compartida, segun el valor de crear
 void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
             int *shm_mapa_fd, int *shm_estado_fd,int crear) {
 
@@ -415,6 +419,15 @@ void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
     if (estado == MAP_FAILED) fatal("No se pudo mapear shm estado");
 }
 
+void cerrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
+     int *shm_mapa_fd, int *shm_estado_fd) {
+    munmap(mapa, size_mapa);
+    munmap(estado, size_estado);
+    close(*shm_mapa_fd);
+    close(*shm_estado_fd);
+}
+
+// borrar los espacios de memoria compartida
 void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre) {
     if (shm_unlink(shm_mapa_nombre) < 0) 
         fatal("Error al borrar memoria mapa");

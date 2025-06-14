@@ -30,14 +30,18 @@
 #define GUARDIAN 'G'
 
 // ACCIONES
-#define CONECTAR 1
-#define MOVERSE 2
+#define CONECTAR 1 
+#define DESPLAZAR 2
 #define DESCONECTAR 3
 #define NOTIFICACION 4
 
+// STATUS
+#define OK 1
+#define ERROR -1
+
 // CLAVES
 #define MAILBOX_SOLICITUD_KEY 12345
-#define MAILBOX_MOVIMIENTO_KEY 12346
+// #define MAILBOX_MOVIMIENTO_KEY 12346
 
 #define TOTAL_CATACUMBAS 10
 
@@ -105,7 +109,6 @@ struct Notificacion {
     char mensaje[MAX_LONGITUD_MENSAJES];
 };
 
-
 // Para comunicación con clientes
 // Puede cambiar segun lo que Cliente haga o tenga
 struct SolicitudServidor {
@@ -122,13 +125,12 @@ struct RespuestaServidor {
 };
 
 // Para comunicación con el directorio (Robado de directorio.h)
-#define MAX_TEXT 100
-struct solicitud
-{
-    long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
-    int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
-    char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
-};
-
+// #define MAX_TEXT 100
+// struct solicitud
+// {
+//     long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
+//     int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
+//     char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
+// };
 
 #endif

@@ -23,26 +23,23 @@
 #define clear() printf("\033[H\033[J")
 
 
+
 void mostrar_menu();
 
-struct RespuestaConexion respuesta;
-struct SolicitudConexion solicitud;
+struct SolicitudServidor solicitud;
+struct RespuestaServidor respuesta;
 
 // la idea es probar
 int main(int argc, char *argv[]) {
     char buffer[150];
     int opcion;
     pid_t mi_pid = getpid();
-    int mailbox_solicitudes_id, mailbox_movimientos_id;
+    int mailbox_solicitudes_id; 
+    int clave_mailbox_respuestas = 12678;
     
     mailbox_solicitudes_id = msgget(MAILBOX_SOLICITUD_KEY,0666);
     if (mailbox_solicitudes_id == -1){
         perror("Error al conectar mailbox solicitud");
-    }
-
-    mailbox_movimientos_id = msgget(MAILBOX_MOVIMIENTO_KEY,0666);
-    if (mailbox_movimientos_id == -1){
-        perror("Error al conectar mailbox respuesta");
     }
     
     printf("este es el cliente test %s", argv[0]);
@@ -61,6 +58,8 @@ int main(int argc, char *argv[]) {
 
         switch (opcion) {
         case CONECTAR:
+            solicitud.mtype = CONECTAR; //para que funcione
+            solicitud.codigo = CONECTAR;
             solicitud.jugador.pid = mi_pid;
             printf("Nombre: ");
             fgets(buffer, sizeof(buffer), stdin);
@@ -72,14 +71,12 @@ int main(int argc, char *argv[]) {
             solicitud.jugador.tipo = getchar();
             while (getchar() != '\n'); // limpiar buffer
             
-            solicitud.mtype = 1; //para que funcione
 
-            solicitud.jugador.posicion.fila = -1;
-            solicitud.jugador.posicion.columna = -1;
+            solicitud.jugador.posicion.fila = 0;
+            solicitud.jugador.posicion.columna = 0;
             // Simular claves de mailbox para respuestas y notificaciones
-            solicitud.clave_mailbox_respuestas = 12678; // valor de prueba
-            solicitud.clave_mailbox_notificaciones = 23678; // valor de prueba
-
+            solicitud.clave_mailbox_respuestas = clave_mailbox_respuestas; // valor de prueba
+    
             solicitud.clave_mailbox_respuestas = msgget(12678, 0666 | IPC_CREAT);
             if (solicitud.clave_mailbox_respuestas == -1) {
                 perror("Error al crear el mailbox de respuesta");
@@ -95,12 +92,9 @@ int main(int argc, char *argv[]) {
                    solicitud.jugador.posicion.fila,
                    solicitud.jugador.posicion.columna);
             printf("Mailbox respuesta: %d\n", solicitud.clave_mailbox_respuestas);
-            printf("Mailbox notificación: %d\n", solicitud.clave_mailbox_notificaciones);
             printf("--------------------------------\n\n");
-            if (msgsnd(mailbox_solicitudes_id,
-                    &solicitud,
-                    sizeof(solicitud) - sizeof(long),
-                    0)== -1) {
+            if (msgsnd(mailbox_solicitudes_id, &solicitud,
+                    sizeof(solicitud) - sizeof(long), 0)== -1) {
                 perror("Error al enviar solicitu de conexion");
                 break;
             }
@@ -113,12 +107,12 @@ int main(int argc, char *argv[]) {
             }
             else {
                 printf("RESPUESTA DEL SERVIDOR\n");
-                printf("%s\n",respuesta.mensaje);
-                printf("%s\n",respuesta.nombre_memoria_mapa);
+                printf("codigo: %d\n",respuesta.codigo);
+                printf("mensaje: %s\n",respuesta.mensaje);
             }
-           
+            
             break;
-        case MOVERSE:
+        case DESPLAZAR:
             struct Movimiento movimiento;
             movimiento.pid_cliente = getpid();
                 
