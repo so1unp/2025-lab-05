@@ -108,4 +108,10 @@ struct respuesta
     int num_elementos;        /**< Número de elementos en la respuesta (útil para listados) */
 };
 
+typedef struct {
+    long mtype;
+    char nombre_catacumba[50];
+    int pid;
+} mensajeEstoyVivo;
+
 #endif // DIRECTORIO_H
