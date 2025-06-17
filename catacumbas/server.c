@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <sys/ipc.h>
+#include <sys/msg.h>
 #define _GNU_SOURCE
 #include "catacumbas.h"
 
@@ -159,8 +160,67 @@ int aceptarJugador(struct Jugador *jugador){
     
 }
 
-void spawnearJugador(){
+/**
+ * @brief Genera un jugador en la zona exterior del mapa.
+ * 
+ * La función intenta encontrar una posición vacía en un anillo exterior
+ * del mapa, definido como la zona entre la mitad del radio del mapa y el borde.
+ * Si no encuentra ninguna posición válida en esa zona (por ejemplo, porque está
+ * llena de paredes u otros jugadores), recurre a la estrategia de
+ * buscar cualquier celda vacía en todo el mapa.
+ * Una vez encontrada una posición, actualiza las coordenadas en la struct Jugador
+ * y modifica el mapa para marcar la celda como ocupada.
+ * 
+ * @param jugador Un puntero a la estructura del jugador que se va a 'spawnear'. 
+ *                La función actualizará la posición de este jugador.
+ */
+void spawnearJugador(struct Jugador *jugador){
+    int centro_fila = FILAS / 2;
+    int centro_columna = COLUMNAS / 2;
+    // Usamos la distancia de Chebyshev (máxima diferencia de coordenadas) como "radio"
+    int max_radius = (FILAS > COLUMNAS) ? (FILAS / 2) : (COLUMNAS / 2);
+    int min_radius = max_radius / 2;
 
+    struct Posicion valid_spawns[FILAS * COLUMNAS];
+    int count = 0;
+    int fila, columna;
+
+    for (fila = 0; fila < FILAS; fila++) {
+        for (columna = 0; columna < COLUMNAS; columna++) {
+            if (mapa[fila][columna] == VACIO) {
+                int dist_fila = abs(fila - centro_fila);
+                int dist_columna = abs(columna - centro_columna);
+                int distancia = (dist_fila > dist_columna) ? dist_fila : dist_columna;
+
+                if (distancia > min_radius) {
+                    valid_spawns[count].fila = fila;
+                    valid_spawns[count].columna = columna;
+                    count++;
+                }
+            }
+        }
+    }
+
+    if (count > 0) {
+        int choice = rand() % count;
+        fila = valid_spawns[choice].fila;
+        columna = valid_spawns[choice].columna;
+
+        jugador->posicion.fila = fila;
+        jugador->posicion.columna = columna;
+        
+        mapa[fila][columna] = MAX_TESOROS + 1;
+    } else {
+        // Fallback: si no hay lugar en el anillo exterior, buscar en cualquier lado.
+        do {
+            fila = rand() % FILAS;
+            columna = rand() % COLUMNAS;
+        } while (mapa[fila][columna] != VACIO);
+
+        jugador->posicion.fila = fila;
+        jugador->posicion.columna = columna;
+        mapa[fila][columna] = MAX_TESOROS + 1; 
+    }
 }
 
 void regenerarMapa(){
