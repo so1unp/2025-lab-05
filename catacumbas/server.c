@@ -7,8 +7,9 @@
 #include <string.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#define _GNU_SOURCE
 #include "catacumbas.h"
+#include <signal.h>
+#define _GNU_SOURCE
 
 
 
@@ -49,28 +50,22 @@ void fatal(char msg[]) {
 #define ANSI_RED     "\x1b[31m"
 #define ANSI_YELLOW  "\x1b[33m"
 #define ANSI_BLUE    "\x1b[34m"
-void mostrarMapa(char mapa[FILAS][COLUMNAS]) {
+void mostrarMapa() {
     printf("\n=== MAPA DE LA CATACUMBA ===\n");
     int i,j;
     for (i = 0; i < FILAS; i++) {
         for (j = 0; j < COLUMNAS; j++) {
-            char c;
             const char *color = ANSI_RESET;
 
-            if (mapa[i][j] == PARED) {
-                c = '#';  
+            if (mapa[i][j] == '#') {
                 color = ANSI_BLUE;
-            } else if (mapa[i][j] == VACIO) {
-                c = ' ';  
-            } else if (mapa[i][j] >= TESORO_OFFSET && mapa[i][j] <= MAX_TESOROS) {
-                c = '$';  
+            } else if (mapa[i][j] == '$') {
                 color = ANSI_YELLOW;
             } else {
-                c = 'J';
                 color = ANSI_RED;
             }
-            // putchar(c);
-            printf("%s%c%s", color, c, ANSI_RESET);
+            //printf("i: %i | j: %i | c: %c\n", i, j, mapa[i][j]);
+            printf("%s%c%s", color, mapa[i][j], ANSI_RESET);
 
         }
         putchar('\n');
@@ -179,11 +174,37 @@ void designArena(char mapa[FILAS][COLUMNAS]) {
  * Se aceptará si el servidor tiene espacio para otro jugador
  * y en el equipo que seleccionó
  * 
- * @param jugador 
- * @return código de resultado
+ * @param jugador Puntero a la estructura del jugador que intenta conectarse. 
+ *                Se utiliza para verificar el equipo solicitado (`jugador->tipo`).
+ * @return Devuelve 1 si el jugador puede ser aceptado, 0 en caso contrario
+ *         (servidor lleno, equipo lleno o tipo de jugador inválido).
  */
 int aceptarJugador(struct Jugador *jugador){
-    
+    //Rechazar lo antes posible, primero se comprueba que el servidro no este lleno, luego el espacio por equipo.
+    // 1. Validar que el servidor no esté lleno en su capacidad total.
+    if (estado->cant_jugadores >= MAX_JUGADORES) {
+        return EXIT_SUCCESS; 
+    }
+
+    // 2. Validar que haya espacio en el equipo específico solicitado.
+    switch (jugador->tipo) {
+        case RAIDER:
+            if (estado->cant_raiders >= MAX_RAIDERS) {
+                return EXIT_SUCCESS; 
+            }
+            break;
+
+        case GUARDIAN:
+            if (estado->cant_guardianes >= MAX_GUARDIANES) {
+                return EXIT_SUCCESS; 
+            }
+            break; 
+
+        default:
+            return EXIT_SUCCESS; 
+    }
+
+    return EXIT_FAILURE;
 }
 
 /**
@@ -268,6 +289,7 @@ void generarTesoro(){
 //      MEMORIA
 // =========================
 void abrirMemoria(){
+
     shm_mapa_fd = 
     shm_open(shm_mapa_nombre,
             O_CREAT | O_RDWR | O_EXCL, 0664);
@@ -298,7 +320,8 @@ void cargarArchivoConfiguracion(char ruta[]){
     }
 
     char linea[100];
-
+    
+    // FIX acá puede tirar excepción si config.properties está vacio
     while (fgets(linea, sizeof(linea), archivo)) {
         // Buscar la clave y el valor
         char *separador = strchr(linea, '=');
@@ -341,6 +364,7 @@ void cargarArchivoMapa(char ruta[]){
             columna = 0;
             fila++;
         }
+        //printf("guardó: %c\n",  mapa[fila][columna-1]);
     }
 
     fclose(archivo);
@@ -357,41 +381,85 @@ void cargarArchivoMapa(char ruta[]){
 //      MAIN
 // =========================
 
+void finish(){
+    if (shm_unlink(shm_mapa_nombre) < 0) fatal("Error al borrar memoria mapa");
+    if (shm_unlink(shm_estado_nombre) < 0) fatal("Error al borrar memoria estado");
+    munmap(mapa, size_mapa);
+    munmap(estado, size_estado);
+    close(shm_mapa_fd);
+    close(shm_estado_fd);
+    if (msgctl(mailbox_solicitudes_id, IPC_RMID, NULL) == -1) {
+        perror("Error al eliminar el buzón de solicitudes");
+        exit(1);
+    }
+    if (msgctl(mailbox_movimientos_id, IPC_RMID, NULL) == -1) {
+        perror("Error al eliminar el buzón de movimientos");
+        exit(1);
+    }
+    printf("Programa terminado\n");
+    exit(EXIT_SUCCESS);
+}
 
-void setup(){
+void setup(char rutaMapa[], char rutaConfig[]){
 
-    abrirMensajeria();
+    // El orden es importante aqui
 
-    // Formar los nombres
+    // Comunicación
     snprintf(shm_mapa_nombre, sizeof(shm_mapa_nombre), 
         SHM_MAPA_PREFIX "%s", catacumbas[catacumba_id]);
     
     snprintf(shm_estado_nombre, sizeof(shm_estado_nombre), 
         SHM_ESTADO_PREFIX "%s", catacumbas[catacumba_id]);
 
-    // Abrir memorias compartidas
     abrirMemoria();
+    abrirMensajeria();
+
+    // Inicializaciones
+    // mapa = malloc(sizeof(char[FILAS][COLUMNAS]));
+    printf("ruta mapa: %s\n", rutaMapa);
+    printf("ruta config: %s\n", rutaConfig);
+
+    cargarArchivoConfiguracion(rutaConfig);
+    printf("max_guardianes: %i\n", max_guardianes);
+    printf("max_raiders: %i\n", max_raiders);
+    printf("max_tesoros: %i\n", max_tesoros);
+
+    cargarArchivoMapa(rutaMapa);
 
     // Generar el mapa
-    designArena(mapa);
+    // designArena(mapa);
 
     // Generar el estado
     memset(estado, 0, sizeof(struct Estado));
     estado->max_jugadores = MAX_JUGADORES;
 
+    // Preparar la señal para detener el proceso y eliminar las cosas
+    // que haya creado
+    signal(SIGINT, finish);
 }
+
 
 
 int main(int argc, char* argv[])
 {
+    setup(argv[1], argv[2]);
 
-    setup();
+    mostrarMapa();
 
-    mostrarMapa(mapa);
-
-    /*
     // RECIBIR SOLICITUDES
     while (1) { 
+
+        sleep(3);
+
+        struct SolicitudServidor solicitud;
+        // Solicitudes del cliente
+        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 1, IPC_NOWAIT) == -1) {
+            perror("msgrcv");
+        } else {
+            printf("Mensaje recibido: %d\n", solicitud.codigo);
+        }
+
+        /*
         // TODO: espera solicitud conexion.
         solicitudJugador(&recibido,mailbox_solicitudes_id, &solicitud);
 
@@ -407,15 +475,10 @@ int main(int argc, char* argv[])
         }
         respuesta.mtype = solicitud.jugador.pid;
         responder(solicitud.clave_mailbox_respuestas, &respuesta);
+        */
     }
-    */
 
-    if (shm_unlink(shm_mapa_nombre) < 0) fatal("Error al borrar memoria mapa");
-    if (shm_unlink(shm_estado_nombre) < 0) fatal("Error al borrar memoria estado");
-    munmap(mapa, size_mapa);
-    munmap(estado, size_estado);
-    close(shm_mapa_fd);
-    close(shm_estado_fd);
+    finish();
 
     exit(EXIT_SUCCESS);
 }

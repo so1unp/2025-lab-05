@@ -18,8 +18,8 @@
 #define MAX_TESOROS 10
 
 // DIMENSION DEL MAPA
-#define FILAS 3
-#define COLUMNAS 5
+#define FILAS 25
+#define COLUMNAS 80
 
 // PREFIJO RECURSOS COMPARTIDOS
 #define SHM_MAPA_PREFIX "/mapa_memoria_"
