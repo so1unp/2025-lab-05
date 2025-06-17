@@ -106,6 +106,27 @@ void abrirMensajeria(){
     }
 }
 
+#define MSG_MOVE 1
+#define MSG_LOGIN 2
+
+struct msg_move 
+{
+    long mtype;
+    struct Jugador player_move;
+};
+
+struct msg_logIn 
+{
+    long mtype;
+    struct Jugador player_move;
+};
+
+union msg {
+    long mtype;
+    struct msg_move move;
+    struct msg_logIn logIn;
+};
+
 /**
  * @brief enviar un mensaje a un cliente
  *  
@@ -118,8 +139,13 @@ void enviarRespuesta(struct Jugador *jugador, int codigo, char *mensaje[]){
  * @brief Revisar los mailboxes en busca de solicitudes posibles
  *  
  */
-void recibirSolicitudes(){
+void recibirSolicitudes(int mailBox){
     // fijate que no sea bloqueante el msgrcv
+    while (1)
+    {
+        
+    }
+    
 }
 
 
