@@ -36,8 +36,7 @@
 #define NOTIFICACION 4
 
 // CLAVES
-#define MAILBOX_SOLICITUD_KEY 12345
-#define MAILBOX_MOVIMIENTO_KEY 12346
+#define MAILBOX_SOLICITUD_KEY 15000
 
 #define TOTAL_CATACUMBAS 10
 
@@ -95,12 +94,12 @@ struct RespuestaServidor {
 };
 
 // Para comunicación con el directorio (Robado de directorio.h)
-#define MAX_TEXT 100
-struct solicitud
-{
-    long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
-    int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
-    char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
-};
+// #define MAX_TEXT 100
+// struct solicitud
+// {
+//     long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
+//     int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
+//     char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
+// };
 
 #endif

@@ -8,6 +8,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include "catacumbas.h"
+#include "directorio.h"
 #include <signal.h>
 #define _GNU_SOURCE
 
@@ -24,7 +25,8 @@ int max_tesoros; //añadir despues al struct Estado
 int max_guardianes; //añadir despues al struct Estado
 int max_raiders; //añadir despues al struct Estado
 struct Jugador* jugador;
-int mailbox_solicitudes_id, mailbox_movimientos_id;
+int mailbox_solicitudes_id, mailbox_movimientos_id,
+    mailbox_comunicacion_directorio, mailbox_respuestas_dir;
 int recibido;
 int size_mapa = sizeof(char) * FILAS * COLUMNAS;
 int size_estado = sizeof(struct Estado);
@@ -94,11 +96,7 @@ void abrirMensajeria(){
         perror("Error al crear el mailbox de solicitudes");
         exit(EXIT_FAILURE);
     }
-    mailbox_movimientos_id = msgget(MAILBOX_MOVIMIENTO_KEY, 0666 | IPC_CREAT);
-    if (mailbox_movimientos_id == -1) {
-        perror("Error al crear el mailbox de respuestas");
-        exit(EXIT_FAILURE);
-    }
+
 }
 
 #define MSG_MOVE 1
@@ -143,7 +141,37 @@ void recibirSolicitudes(int mailBox){
     
 }
 
+void comunicacionConDirectorio() {
+    // mailbox_comunicacion_directorio = msgget(MAILBOX_KEY, 0666);
+    // if (mailbox_comunicacion_directorio == -1)
+    // {
+    //     perror("no se pudo establecer coneccion con el directorio");
+    // }
 
+    // mailbox_respuestas_dir = msgget(MAILBOX_RESPUESTA_KEY, 0666);
+    // if (mailbox_respuestas_dir == -1)
+    // {
+    //     perror("no se pudo establecer coneccion con el directorio, respuestas");
+    // }
+
+    struct mensaje_solicitud solicitudDirectorio;
+
+    solicitudDirectorio.mtype = getpid();
+    solicitudDirectorio.solicitud.tipo = OP_AGREGAR;
+   snprintf(
+    solicitudDirectorio.solicitud.texto,                 /* destino                    */
+    sizeof(solicitudDirectorio.solicitud.texto),         /* tamaño del destino         */
+    "%s|%s|%d",                                /* formato                    */
+    "nombre_generico_1",                           /* nombreMapa                 */
+    shm_mapa_nombre,                         /* nombreDirMem                 */
+    MAILBOX_SOLICITUD_KEY                      /* entero → texto             */
+);
+
+    printf("%s\n", solicitudDirectorio.solicitud.texto);
+
+    msgsnd(mailbox_comunicacion_directorio, &solicitudDirectorio, sizeof(struct solicitud), 0);
+    
+}
 
 
 
@@ -445,6 +473,8 @@ int main(int argc, char* argv[])
     setup(argv[1], argv[2]);
 
     mostrarMapa();
+
+    comunicacionConDirectorio();
 
     // RECIBIR SOLICITUDES
     while (1) { 
