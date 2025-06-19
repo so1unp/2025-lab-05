@@ -1,14 +1,14 @@
 CC=gcc
 CFLAGS=-Wall -Werror -g -pthread -lncurses
 
-PROGS=raider guardian
+PROGS=main
 
-.PHONY: all
+.PHONY: all clean
+
 all: $(PROGS)
 
-%: %.c
-	$(CC) -o $@ $< $(CFLAGS)
+main: main.c seleccion-mapa.c seleccion-rol.c base.c gameover.c
+	$(CC) -o $@ $^ $(CFLAGS)
 
-.PHONY: clean
 clean:
 	rm -f $(PROGS)
