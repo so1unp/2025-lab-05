@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
     // ==================== CREACIÓN DE MAILBOXES ====================
     // Crear o conectar al mailbox de solicitudes
-    mailbox_solicitudes_id = msgget(MAILBOX_KEY, 0666 | IPC_CREAT);
+    mailbox_solicitudes_id = msgget(MAILBOX_KEY, 0777 | IPC_CREAT);
     if (mailbox_solicitudes_id == -1)
     {
         perror("Error al crear el mailbox de solicitudes");
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
     }
 
     // Crear o conectar al mailbox de respuestas
-    mailbox_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0666 | IPC_CREAT);
+    mailbox_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0777 | IPC_CREAT);
     if (mailbox_respuestas_id == -1)
     {
         perror("Error al crear el mailbox de respuestas");
