@@ -1,10 +1,11 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread 
+CFLAGS=-Wall -Werror -g -pthread -I../directorio
 
 PROGS=server
 
 .PHONY: all
 all: $(PROGS)
+
 
 %: %.c
 	$(CC) -o $@ $< $(CFLAGS)
