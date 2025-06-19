@@ -16,6 +16,7 @@
 // Variables globales para rol y mapa seleccionados
 char selected_role[50] = "NO SELECCIONADO";
 char selected_map[50] = "NO SELECCIONADO";
+char player_character = 'J'; // Valor por defecto para el personaje del jugador
 
 // Funciones para establecer rol y mapa
 void set_game_role(const char *role)
@@ -37,7 +38,7 @@ void set_game_map(const char *map)
 }
 
 // Declaraciones de funciones externas
-extern int mostrar_base();
+extern int mostrar_base(char player_character);
 extern int mostrar_menu_rol();
 extern int mostrar_seleccion_mapa();
 
@@ -482,7 +483,12 @@ int ejecutar_base()
     // Cerrar ncurses antes de iniciar el juego base
     endwin();
     clear();
-    int resultado = mostrar_base();
+    int resultado = mostrar_base(player_character);
 
     return resultado;
 }
+void setPlayChar(char c) {
+    player_character = c;
+}
+
+
