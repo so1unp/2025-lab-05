@@ -83,7 +83,6 @@ int mostrar_menu_rol()
         // Mostrar caracteres del juego
         mvprintw(max_y / 2 + 4, max_x / 2 - 15, "Explorador: %c", JUGADOR_EXPLORADOR);
         mvprintw(max_y / 2 + 5, max_x / 2 - 15, "Guardian:   %c", JUGADOR_GUARDIAN);
-        mvprintw(max_y / 2 + 6, max_x / 2 - 15, "Tesoro:     %c", CELDA_TESORO);
 
         refresh();
 
