@@ -11,14 +11,18 @@ Para comunicarnos con el servidor, enviaremos un mensajea que contenga:
 Nosotros (cliente) nos encargamos de:
 Detectar bordes, obstáculos y colisiones especiales, para no sobrecargar el servidor con constantes solicitudes.
 
-RELACIÓN CON DIRECTORIO**
+RELACIÓN CON DIRECTORIO** (LISTA)
 Para la lista de mapas disponibles, necesitaremos comunicarnos con el directorio, el cual tiene la información:
+SOLICITUD:
+- Nuestro PID
+- Tipo de opcion (listar, crear, etc)
+- Texto (mensaje extra)
 
-- Nombre del mapa
-- Direccion de memoria compartida
-- Mailboc de la catacumba
-- Capacidad máxima del mapa
-- Cantidad de jugadores actual
+RESPUESTA RECIBIDA:
+- PID (para saber cual nos corresponde)
+- Código (ok o error)
+- Número de catacumbas
+- Datos de las catacumbas ej) Catacumba1|Dir1|Mailbox1|0|10;Catacumba2|Dir2|Mailbox2|5|20;...
 
 
 Ejemplo de como lo visualizamos desde el cliente:
