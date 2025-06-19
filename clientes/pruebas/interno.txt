@@ -1,0 +1,13 @@
+memoria compartida??
+
+Ejecutar varios .c (pantallas + jugadores) o un .c que llame a las funciónes de mostrar pantallas?
+
+
+archivo config:
+nombre_memoriaCompartida_catacumba;nombre_archivoConfig_jugador
+
+archivo config jugador:
+caracter_caminable;caracter_atrapable
+
+(probablemente tambien se guarden los mensajes especiales para el servidor)
+

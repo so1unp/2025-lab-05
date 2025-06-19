@@ -1,0 +1,31 @@
+Estructura JugadorConfig:
+    atrapa: cadena de caracteres
+    camina: cadena de caracteres
+
+Función cargar_config(archivo, config):
+    Abrir archivo para leer
+    Para cada línea del archivo:
+        Leer clave y valor (separados por ':')
+        Si clave es "atrapa":
+            Guardar valor en config.atrapa
+        Si clave es "camina":
+            Guardar valor en config.camina
+    Cerrar archivo
+
+Función contiene(regla, celda):
+    Para cada carácter en regla:
+        Si carácter == celda:
+            Devolver verdadero
+    Devolver falso
+
+Función is_walkable(celda, config):
+    Si contiene(config.camina, celda) o contiene(config.atrapa, celda):
+        Devolver verdadero
+    Si no:
+        Devolver falso
+
+Función is_captura(celda, config):
+    Si contiene(config.atrapa, celda):
+        Devolver verdadero
+    Si no:
+        Devolver falso

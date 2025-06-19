@@ -1,16 +1,15 @@
-
-
 #include <ncurses.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdio.h>
+#include "juego_constantes.h"
 
 #define WIDTH 20
 #define HEIGHT 10
 #define SHM_NAME "/mapa_memoria"
 
-char (*map)[WIDTH + 1]; // puntero a memoria compartida
+char (*map)[WIDTH + 1];
 
 int px = 1, py = 1;
 
@@ -23,21 +22,16 @@ void draw_map()
     refresh();
 }
 
-int is_walkable(int y, int x)
-{
-    char cell = map[y][x];
-    return cell == ' ' || cell == '$';
-}
-
 int main()
 {
+    int tipo_jugador = JUGADOR_EXPLORADOR;
+
     // Abrir memoria compartida
     int shm_fd = shm_open(SHM_NAME, O_RDONLY, 0664);
     if (shm_fd == -1) {
         perror("shm_open");
         return 1;
     }
-    // Mapear memoria compartida
     map = mmap(NULL, HEIGHT * (WIDTH + 1), PROT_READ, MAP_SHARED, shm_fd, 0);
     if (map == MAP_FAILED) {
         perror("mmap");
@@ -62,31 +56,23 @@ int main()
 
         switch (ch)
         {
-        case KEY_UP:
-            new_py--;
-            break;
-        case KEY_DOWN:
-            new_py++;
-            break;
-        case KEY_LEFT:
-            new_px--;
-            break;
-        case KEY_RIGHT:
-            new_px++;
-            break;
+        case KEY_UP:    new_py--; break;
+        case KEY_DOWN:  new_py++; break;
+        case KEY_LEFT:  new_px--; break;
+        case KEY_RIGHT: new_px++; break;
         }
 
-        if (is_walkable(new_py, new_px))
+        if (es_caminable(tipo_jugador, map[new_py][new_px]))
         {
             px = new_px;
             py = new_py;
         }
         draw_map();
-        mvaddch(py, px, 'E');
+        mvaddch(py, px, CELDA_EXPLORADOR);
 
-        if (map[py][px] == '$')
+        if (captura_tesoro(tipo_jugador, map[py][px]))
         {
-            mvprintw(HEIGHT + 1, 0, "ya ganaste pa, toca la q para salir del juego");
+            mvprintw(HEIGHT + 1, 0, "¡Ganaste! Toca 'q' para salir del juego");
         }
         refresh();
     }
