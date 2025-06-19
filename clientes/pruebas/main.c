@@ -113,7 +113,7 @@ int mostrar_menu_principal() {
         
         // Instrucciones
         mvprintw(max_y - 4, (max_x - strlen("Usa flechas para navegar, ENTER para seleccionar, ESC para salir"))/2,
-                "Usa ↑↓ para navegar, ENTER para seleccionar, ESC para salir");
+                "Usa flechas para navegar, ENTER para seleccionar, ESC para salir");
         
         // Info adicional
         refresh();

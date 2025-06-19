@@ -28,19 +28,14 @@ void draw_static_header() {
     attron(COLOR_PAIR(4));
     
     // Línea superior del marco
-    mvprintw(0, 0, "___________________________________________________________________");
     
     // Información del juego
     mvprintw(1, 0, "|");
-    mvprintw(1, 2, "ROL: %s", selected_role);
+    mvprintw(1, 2, "ROL: %s                          ", selected_role);
     mvprintw(1, 25, "|");
-    mvprintw(1, 27, "MAPA: %s", selected_map);
-    mvprintw(1, 50, "|");
-    mvprintw(1, 52, "ESTADO: JUGANDO");
-    mvprintw(1, 68, "|");
+    mvprintw(1, 27, "MAPA: %s                        ", selected_map);
     
     // Línea inferior del marco
-    mvprintw(2, 0, "-------------------------------------------------------------------");
     
     attroff(COLOR_PAIR(4));
 }
@@ -78,7 +73,7 @@ void draw_map()
     
     // Instrucciones en la parte inferior
     attron(COLOR_PAIR(5));
-    mvprintw(HEIGHT + 6, 2, "Controles: ↑↓←→ = Mover, 'q' = Salir");
+    mvprintw(HEIGHT + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     attroff(COLOR_PAIR(5));
     
     refresh();
@@ -102,7 +97,7 @@ int mostrar_base() {
     //Espacio caminable
     init_pair(3, COLOR_BLACK, COLOR_GREEN);
     //Header fijo
-    init_pair(4, COLOR_WHITE, COLOR_BLUE);
+    init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
     //Instrucciones
     init_pair(5, COLOR_YELLOW, COLOR_BLACK);
     
