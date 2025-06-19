@@ -1,15 +1,12 @@
 CC=gcc
 CFLAGS=-Wall -Werror -g -pthread 
 
-PROGS=server clienteD
+PROGS=server
 
 .PHONY: all
 all: $(PROGS)
 
-server: server.c
-	$(CC) -o $@ $< $(CFLAGS)
-
-clienteD: clienteD.c
+%: %.c
 	$(CC) -o $@ $< $(CFLAGS)
 
 .PHONY: clean

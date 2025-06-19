@@ -33,6 +33,12 @@
 /** @brief Longitud máxima para los datos de una respuesta */
 #define MAX_DAT_RESP 4096
 
+/** @brief Archivo donde se persisten las catacumbas */
+#define ARCHIVO_CATACUMBAS "catacumbas_persistidas.dat"
+
+/** @brief Archivo de configuración del directorio */
+#define ARCHIVO_CONFIG "directorio_config.txt"
+
 // ==================== CÓDIGOS DE OPERACIÓN ====================
 // Estos códigos identifican qué operación quiere realizar el cliente
 
@@ -108,10 +114,29 @@ struct respuesta
     int num_elementos;        /**< Número de elementos en la respuesta (útil para listados) */
 };
 
-typedef struct {
+typedef struct
+{
     long mtype;
     char nombre_catacumba[50];
     int pid;
 } mensajeEstoyVivo;
+
+// ==================== PROTOTIPOS DE FUNCIONES DE PERSISTENCIA ====================
+
+/**
+ * @brief Carga las catacumbas desde el archivo de persistencia
+ * @param catacumbas Array donde se cargarán las catacumbas
+ * @param num_catacumbas Puntero al contador de catacumbas (se actualiza)
+ * @return 0 si se carga correctamente, -1 si hay error o no existe el archivo
+ */
+int cargarCatacumbas(struct catacumba catacumbas[], int *num_catacumbas);
+
+/**
+ * @brief Guarda las catacumbas actuales en el archivo de persistencia
+ * @param catacumbas Array de catacumbas a guardar
+ * @param num_catacumbas Número de catacumbas en el array
+ * @return 0 si se guarda correctamente, -1 si hay error
+ */
+int guardarCatacumbas(struct catacumba catacumbas[], int num_catacumbas);
 
 #endif // DIRECTORIO_H
