@@ -112,13 +112,13 @@ int main(int argc, char *argv[]) {
             }
             
             break;
-        case DESPLAZAR:
-            struct Movimiento movimiento;
-            movimiento.pid_cliente = getpid();
+        case MOVERSE:
+            struct Jugador jugador;
+            jugador.pid = getpid();
                 
             // Simulamos posición actual (ejemplo: centro del mapa)
             struct Posicion actual = {5, 5}; // Esto sería real en producción
-            movimiento.posicion = actual;
+            jugador.posicion = actual;
                 
             printf("Movimiento de jugador:\n");
             printf("\tW(^)\tS(v)\tA(<)\tD(>)\n");
@@ -129,16 +129,16 @@ int main(int argc, char *argv[]) {
             // Actualizar posición según dirección
             switch (dir) {
                 case 'W': case 'w':
-                    movimiento.posicion.fila--;
+                    jugador.posicion.fila--;
                     break;
                 case 'S': case 's':
-                    movimiento.posicion.fila++;
+                    jugador.posicion.fila++;
                     break;
                 case 'A': case 'a':
-                    movimiento.posicion.columna--;
+                    jugador.posicion.columna--;
                     break;
                 case 'D': case 'd':
-                    movimiento.posicion.columna++;
+                    jugador.posicion.columna++;
                     break;
                 default:
                     printf(ANSI_RED "Dirección inválida. Usa W/A/S/D.\n" ANSI_RESET);
@@ -147,10 +147,10 @@ int main(int argc, char *argv[]) {
         
             // Mostrar movimiento simulado
             printf("\n--- MENSAJE DE MOVIMIENTO ---\n");
-            printf("PID: %ld\n", movimiento.pid_cliente);
+            printf("PID: %ld\n", jugador.pid);
             printf("Posición destino: fila=%d, columna=%d\n",
-                   movimiento.posicion.fila,
-                   movimiento.posicion.columna);
+                   jugador.posicion.fila,
+                   jugador.posicion.columna);
             printf("----------------------------------\n");
             // TODO: enviar movimiento
             break;

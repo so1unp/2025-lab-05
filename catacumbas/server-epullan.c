@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -57,7 +58,8 @@ void solicitudJugador(int mailbox_solicitudes_id, struct SolicitudServidor *soli
 void responderJugador(int mailbox_respuestas_id, struct RespuestaServidor *respuesta);
 
 // TODO: un hilo que se encargue solo de la atencion de directorio
-void *hiloDirectorio();// se crea un hilo dedicado exclusivamente a la atencion de solicitudes del directorio.
+void *hiloDirectorio(void *arg);// se crea un hilo dedicado exclusivamente a la atencion de solicitudes del directorio.
+void *hiloMapa(void *arg);
 void solicitudDirectorio(int mailbox_solicitudes_id, struct solicitud *solicitud);
 void responderDirectorio(int mailbox_repuestas_id, struct respuesta *respuesta);
 
@@ -67,7 +69,7 @@ void responderDirectorio(int mailbox_repuestas_id, struct respuesta *respuesta);
 void conectarMailbox();
 void nombresMemoria(char *shm_mapa_nombre,size_t size_mmapa, char *shm_estado_nombre, size_t size_mestado, int catacumba_id);
 void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre, int *shm_mapa_fd, int *shm_estado_fd,int crear);
-void cerrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre, int *shm_mapa_fd, int *shm_estado_fd);
+void cerrarMemoria(int *shm_mapa_fd, int *shm_estado_fd);
 void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre);
 
 // =========================
@@ -79,10 +81,18 @@ char (*mapa)[COLUMNAS];
 struct Estado *estado;
 struct Jugador* jugador;
 
+pthread_t hilo_directorio;
+
+pthread_t hilo_mapa;
+
 struct SolicitudServidor solicitud;
 struct RespuestaServidor respuesta;
 
+struct solicitud d_solicitud;
+struct respuesta d_respuesta;
+
 int mailbox_solicitudes_id;
+int solicitud_directorio_id, respuesta_directorio_id;
 int size_mapa, size_estado;
 
 // server:
@@ -101,7 +111,7 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    int size_mapa, size_estado;
+    // int size_mapa, size_estado;
 
     signal(SIGINT,handler);
     conectarMailbox();
@@ -121,6 +131,7 @@ int main(int argc, char* argv[]) {
     nombresMemoria(shm_mapa_nombre, sizeof(shm_mapa_nombre),
         shm_estado_nombre, sizeof(shm_estado_nombre),
         catacumba_id);
+
     int shm_mapa_fd, shm_estado_fd;
 
     char option = argv[1][1];
@@ -143,11 +154,7 @@ int main(int argc, char* argv[]) {
             " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
-        munmap(mapa, size_mapa);
-        munmap(estado, size_estado);
-        close(shm_mapa_fd);
-        close(shm_estado_fd);
-
+        cerrarMemoria(&shm_mapa_fd,&shm_estado_fd);
         break;
     case 'b':
         verificarArgumentos(argc, argv);
@@ -164,6 +171,9 @@ int main(int argc, char* argv[]) {
         verificarArgumentos(argc, argv);
         int clave_mailbox_respuestas;
 
+        pthread_create(&hilo_directorio,NULL,hiloDirectorio, NULL); // Un hilo para atender al directorio
+        pthread_create(&hilo_mapa,NULL,hiloMapa, NULL); // Un hilo para atender al directorio
+        
         abrirMemoria(shm_mapa_nombre, shm_estado_nombre,
              &shm_mapa_fd, &shm_estado_fd, 0); // solo abre
 
@@ -180,11 +190,11 @@ int main(int argc, char* argv[]) {
                  !ingresarJugador(solicitud.jugador, mapa)) {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Intento fallido, no se conecto jugador");
-                respuesta.codigo = ERROR;
+                respuesta.codigo = -1;
             }  else {
                 snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                      "Jugador conectado con éxito");
-                respuesta.codigo = OK;
+                respuesta.codigo = 1;
             }
             responderJugador(clave_mailbox_respuestas, &respuesta);
         }
@@ -203,10 +213,7 @@ int main(int argc, char* argv[]) {
             " Presiona Enter para salir...\n", catacumbas[catacumba_id]);
         getchar();
 
-        munmap(mapa, size_mapa);
-        munmap(estado, size_estado);
-        close(shm_mapa_fd);
-        close(shm_estado_fd);
+        cerrarMemoria(&shm_mapa_fd,&shm_estado_fd);
         break;
     case 'h':
         usage(argv);
@@ -346,8 +353,8 @@ void solicitudJugador(int mailbox_solicitudes_id,
 
     printf("Esperando nuevas solicitudes de conexion...\n");
     if (msgrcv(mailbox_solicitudes_id, solicitud,
-        sizeof(struct SolicitudConexion) - sizeof(long), 0, 0) == -1) {
-        perror("Error al recibir solicitud");
+        sizeof(struct SolicitudServidor) - sizeof(long), 0, 0) == -1) {
+        perror("Error al recibir solicitud de jugador");
         return;
     }
 }
@@ -358,7 +365,7 @@ void responderJugador(int mailbox_respuestas_id,
  
     if (msgsnd(mailbox_respuestas_id, respuesta,
          sizeof(struct RespuestaServidor) - sizeof(long), 0) == -1) {
-        perror("Error al enviar respuesta");
+        perror("Error al enviar respuesta al jugador");
     } else {
         printf("Respuesta enviada al cliente PID %ld\n",
             respuesta->mtype);
@@ -373,6 +380,19 @@ void conectarMailbox() {
         perror("Error al crear el mailbox de solicitudes");
         exit(EXIT_FAILURE);
     }
+
+    // solicitud_directorio_id = msgget(  
+    //     MAILBOX_KEY, 666);
+    // if (mailbox_solicitudes_id == -1) {
+    //     perror("Error al crear el mailbox de solicitudes");
+    //     exit(EXIT_FAILURE);
+    // }
+    // respuesta_directorio_id = msgget(   
+    //         MAILBOX_RESPUESTA_KEY, 0666 | IPC_CREAT);
+    // if (mailbox_solicitudes_id == -1) {
+    //     perror("Error al crear el mailbox de solicitudes");
+    //     exit(EXIT_FAILURE);
+    // }
 }
 
 // nombramiento de los espacios de memoria:
@@ -419,8 +439,8 @@ void abrirMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
     if (estado == MAP_FAILED) fatal("No se pudo mapear shm estado");
 }
 
-void cerrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre,
-     int *shm_mapa_fd, int *shm_estado_fd) {
+// cerrar la memoria compartida
+void cerrarMemoria(int *shm_mapa_fd, int *shm_estado_fd) {
     munmap(mapa, size_mapa);
     munmap(estado, size_estado);
     close(*shm_mapa_fd);
@@ -433,4 +453,49 @@ void borrarMemoria(char *shm_mapa_nombre, char *shm_estado_nombre) {
         fatal("Error al borrar memoria mapa");
     if (shm_unlink(shm_estado_nombre) < 0) 
         fatal("Error al borrar memoria estado");
+}
+
+// hilo encargado de atender el directorio
+void *hiloDirectorio(void *arg) { 
+    printf("espera por mensajes de directorio \n");
+
+    // solicitudDirectorio(solicitud_directorio_id,&d_solicitud);
+    // //
+    // d_respuesta.mtype = getpid();
+    // respuesta.codigo = 1;
+    // snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+    //     "...");
+    // responderDirectorio(respuesta_directorio_id, &d_respuesta);
+    printf("hasta luego...\n");
+    pthread_exit(NULL);
+}
+
+// hilo encargado de mostrar el mapa
+void *hiloMapa(void *arg) { 
+    while (1) {
+        mostrarMapa(mapa);
+        sleep(5);
+    }
+}
+
+void solicitudDirectorio(int mailbox_solicitudes_id,
+     struct solicitud *solicitud) {
+
+   printf("Esperando nuevas solicitudes de conexion...\n");
+   if (msgrcv(mailbox_solicitudes_id, solicitud,
+       sizeof(struct solicitud) - sizeof(long), 0, 0) == -1) {
+       perror("Error al recibir solicitud del directorio");
+       return;
+   }
+}
+
+void responderDirectorio(int mailbox_repuestas_id,
+     struct respuesta *respuesta) {
+        if (msgsnd(mailbox_repuestas_id, respuesta,
+            sizeof(struct respuesta) - sizeof(long), 0) == -1) {
+           perror("Error al enviar respuesta al directorio");
+       } else {
+           printf("Respuesta enviada al cliente PID %ld\n",
+               respuesta->mtype);
+       }
 }
