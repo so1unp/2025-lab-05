@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/ipc.h>
 #define _GNU_SOURCE
+#include "catacumbas.h"
+
 
 // Nos tenemos que poner de acuerdo con las claves de mailbox y nombres de memoria
 // con el resto de equipos
@@ -29,59 +31,12 @@
 #define FILAS 25
 #define COLUMNAS 80
 
-struct Posicion {
-    int fila;
-    int columna;
-};
-
-struct Tesoro {
-    int local_id;
-    struct Posicion posicion;
-};
-
-struct Jugador {
-    int pid;
-    char nombre[MAX_LONGITUD_NOMBRE_JUGADOR];
-    char tipo;
-    struct Posicion posicion;
-};
-
-struct Estado {
-    int max_jugadores;
-    int cant_jugadores;
-    int cant_raiders;
-    int cant_guardianes;
-    int cant_tesoros;
-};
-
 struct Tesoro tesoros[MAX_TESOROS];
 struct Estado *estado;
 char (*mapa)[COLUMNAS];
 int mailbox_solicitudes_id;
 struct Jugador jugadores[MAX_JUGADORES];
 
-// Para comunicación con clientes
-// Puede cambiar segun lo que Cliente haga o tenga
-struct SolicitudServidor {
-    long mtype;
-    int codigo; // para identificar eventos que ocurrieron del lado del cliente
-    int clave_mailbox_respuestas; //mailbox del cliente
-    struct Jugador jugador;
-};
-
-struct RespuestaServidor {
-    int codigo;
-    char mensaje[MAX_LONGITUD_MENSAJES];
-};
-
-// Para comunicación con el directorio (Robado de directorio.h)
-#define MAX_TEXT 100
-struct solicitud
-{
-    long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
-    int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
-    char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
-};
 
 
 
@@ -95,8 +50,8 @@ struct solicitud
  * @brief Crear todos los espacios compartidos para IPC
  *  
  */
-void setup(){
-    mailbox_solicitudes_id = msgget(MAILBOX_SOLICITUD_KEY, 0666);
+void setup(int key){
+    mailbox_solicitudes_id = msgget(key, 0666);
     if (mailbox_solicitudes_id == -1) {
         perror("Error al crear el mailbox de solicitudes");
         exit(EXIT_FAILURE);
@@ -108,24 +63,42 @@ int main(int argc, char* argv[])
 {
     printf("Catacumba\n");
 
-    setup();
+    setup(atoi(argv[1]));
     
-    int codigo = 0;
     while(1){
+        struct SolicitudServidor {
+            long mtype; // el PID del cliente
+            int codigo; // codigos especiales para tipos de mensajes
+            int clave_mailbox_respuestas; // Mailbox del cliente
+            int fila; // Posición
+            int columna; 
+            char tipo; // Raider o guardian
+        };
         struct SolicitudServidor solicitud;
         solicitud.mtype = 1;
-        solicitud.codigo = codigo;
-        printf("Tamaño del mensaje: %ld\n", sizeof(solicitud) - sizeof(long));
+        solicitud.codigo = CONEXION;
+        solicitud.tipo = GUARDIAN;
+        solicitud.fila = 0;
+        solicitud.columna = 0;
         if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
             perror("msgsnd");
             exit(1);
         }
         printf("Mensaje enviado: %d\n", solicitud.codigo);
 
-        codigo = codigo + 1;
         sleep(2);
     }
 
     exit(EXIT_SUCCESS);
 }
 
+
+
+/*
+Abrir y cerrar mailbox para enviar mensajes
+(para recibir despues veremos)
+
+
+
+
+*/

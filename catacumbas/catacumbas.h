@@ -2,9 +2,11 @@
 #define CATACUMBAS_H
 
 // VALORES MAPA
-#define PARED -1
-#define VACIO 0
-#define TESORO_OFFSET 1
+#define PARED '#'
+#define VACIO ' '
+#define TESORO '$'
+#define RAIDER 'R'
+#define GUARDIAN 'G'
 
 // LONG. DE STRINGS
 #define MAX_LONGITUD_NOMBRE_RUTAS 50
@@ -22,36 +24,15 @@
 #define COLUMNAS 80
 
 // PREFIJO RECURSOS COMPARTIDOS
-#define SHM_MAPA_PREFIX "/mapa_memoria_"
-#define SHM_ESTADO_PREFIX "/estado_memoria_"
-
-// TIPO JUGADOR
-#define RAIDER 'R'
-#define GUARDIAN 'G'
+#define MEMORIA_MAPA_PREFIJO "/servidor-mapa-"
+#define MEMORIA_ESTADO_PREFIJO "/servidor-estado-"
+#define MAILBOX_SOLICITUDES_SUFIJO 10
 
 // ACCIONES
-#define CONECTAR 1
-#define MOVERSE 2
-#define DESCONECTAR 3
+#define CONEXION 1
+#define DESCONEXION 2
+#define MOVERSE 3
 #define NOTIFICACION 4
-
-// CLAVES
-#define MAILBOX_SOLICITUD_KEY 15000
-
-#define TOTAL_CATACUMBAS 10
-
-const char* catacumbas[TOTAL_CATACUMBAS] = {
-    "stack_overflow_abyss",
-    "segfault_sanctum",
-    "kernel_panic_crypts",
-    "syscall_shrine",
-    "mmu_maze",
-    "dev_null_vaults",
-    "trapframe_tomb",
-    "bus_error_bastion",
-    "deadlock_dungeons",
-    "segmented_shadows"
-};
 
 struct Posicion {
     int fila;
@@ -81,10 +62,12 @@ struct Estado {
 // Para comunicación con clientes
 // Puede cambiar segun lo que Cliente haga o tenga
 struct SolicitudServidor {
-    long mtype;
-    int codigo; // ponerse de acuerdo con cliente y directorio para los códigos
-    int clave_mailbox_respuestas; //mailbox del cliente
-    struct Jugador jugador;
+    long mtype; // el PID del cliente
+    int codigo; // codigos especiales para tipos de mensajes
+    int clave_mailbox_respuestas; // Mailbox del cliente
+    int fila; // Posición
+    int columna; 
+    char tipo; // Raider o guardian
 };
 
 struct RespuestaServidor {
@@ -92,14 +75,5 @@ struct RespuestaServidor {
     int codigo;
     char mensaje[MAX_LONGITUD_MENSAJES];
 };
-
-// Para comunicación con el directorio (Robado de directorio.h)
-// #define MAX_TEXT 100
-// struct solicitud
-// {
-//     long mtype;           /**< PID del cliente (requerido por las funciones msgrcv/msgsnd) */
-//     int tipo;             /**< Código de operación (OP_LISTAR, OP_AGREGAR, etc.) */
-//     char texto[MAX_TEXT]; /**< Datos adicionales según la operación (nombre, dirección, etc.) */
-// };
 
 #endif
