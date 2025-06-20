@@ -368,7 +368,7 @@ void abrirMensajeria()
         perror("Error al abrir mailbox de solicitudes de directorio");
     }
 
-    mailbox_directorio_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0666);
+    mailbox_directorio_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0777);
     if (mailbox_directorio_respuestas_id == -1)
     {
         perror("Error al abrir mailbox de respuestas de directorio");
@@ -587,3 +587,10 @@ int main(int argc, char *argv[])
 
     exit(EXIT_SUCCESS);
 }
+
+
+
+
+
+
+

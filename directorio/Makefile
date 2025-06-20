@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread 
+CFLAGS=-std=c99
 
-PROGS=server
+PROGS=server clienteD
 
 .PHONY: all
 all: $(PROGS)

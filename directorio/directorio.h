@@ -28,10 +28,16 @@
 #define MAX_RUTA 100
 
 /** @brief Longitud máxima para el texto de un mensaje */
-#define MAX_TEXT 100
+#define MAX_TEXT 4096
 
 /** @brief Longitud máxima para los datos de una respuesta */
 #define MAX_DAT_RESP 4096
+
+/** @brief Archivo donde se persisten las catacumbas */
+#define ARCHIVO_CATACUMBAS "catacumbas_persistidas.dat"
+
+/** @brief Archivo de configuración del directorio */
+#define ARCHIVO_CONFIG "directorio_config.txt"
 
 // ==================== CÓDIGOS DE OPERACIÓN ====================
 // Estos códigos identifican qué operación quiere realizar el cliente
@@ -47,9 +53,6 @@
 
 /** @brief Operación: Eliminar una catacumba del directorio */
 #define OP_ELIMINAR 4
-
-/** @brief Operación: Hacer ping de estado del servidor */
-#define OP_PING 4
 
 // ==================== CÓDIGOS DE RESPUESTA ====================
 // Estos códigos indican el resultado de la operación solicitada
@@ -76,11 +79,13 @@
  */
 struct catacumba
 {
-    char nombre[MAX_NOM];     /**< Nombre único identificador de la catacumba */
-    char direccion[MAX_RUTA]; /**< Ruta al archivo de memoria compartida de la catacumba */
-    char mailbox[MAX_NOM];    /**< Ruta al mailbox de mensajes de la catacumba */
-    int cantJug;              /**< Cantidad de jugadores en la catacumba */
-    int cantMaxJug;           /**< Cantidad máxima de jugadores permitidos en la catacumba */
+    int pid;                      /**< PID del proceso que maneja la catacumba */
+    char nombre[MAX_NOM];         /**< Nombre único identificador de la catacumba */
+    char direccion[MAX_RUTA];     /**< Ruta al archivo de memoria compartida de la catacumba */
+    char propCatacumba[MAX_RUTA]; /**< Ruta al archivo de memoria compartida de las propiedades la catacumba */
+    char mailbox[MAX_NOM];        /**< Ruta al mailbox de mensajes de la catacumba */
+    int cantJug;                  /**< Cantidad de jugadores en la catacumba */
+    int cantMaxJug;               /**< Cantidad máxima de jugadores permitidos en la catacumba */
 };
 
 /**
@@ -109,5 +114,23 @@ struct respuesta
     char datos[MAX_DAT_RESP]; /**< Datos de respuesta (lista de catacumbas, mensajes, etc.) */
     int num_elementos;        /**< Número de elementos en la respuesta (útil para listados) */
 };
+
+// ==================== PROTOTIPOS DE FUNCIONES DE PERSISTENCIA ====================
+
+/**
+ * @brief Carga las catacumbas desde el archivo de persistencia
+ * @param catacumbas Array donde se cargarán las catacumbas
+ * @param num_catacumbas Puntero al contador de catacumbas (se actualiza)
+ * @return 0 si se carga correctamente, -1 si hay error o no existe el archivo
+ */
+int cargarCatacumbas(struct catacumba catacumbas[], int *num_catacumbas);
+
+/**
+ * @brief Guarda las catacumbas actuales en el archivo de persistencia
+ * @param catacumbas Array de catacumbas a guardar
+ * @param num_catacumbas Número de catacumbas en el array
+ * @return 0 si se guarda correctamente, -1 si hay error
+ */
+int guardarCatacumbas(struct catacumba catacumbas[], int num_catacumbas);
 
 #endif // DIRECTORIO_H

@@ -66,6 +66,8 @@ dkms.conf
 # Binarios de los ejercicios
 catacumbas/server
 directorio/server
+directorio/clienteD
+directorio/catacumbas_persistidas.dat
 clientes/raider
 clientes/guardian
 ejemplos/ncurses-pong
