@@ -379,7 +379,7 @@ void abrirMemoria()
 
     memoria_mapa_fd =
         shm_open(memoria_mapa_nombre,
-                 O_CREAT | O_RDWR | O_EXCL, 0664);
+                 O_CREAT | O_RDWR | O_EXCL, 0777);
     if (memoria_mapa_fd == -1)
         fatal("Error creando shm mapa");
     if (ftruncate(memoria_mapa_fd, size_mapa) == -1)
@@ -392,7 +392,7 @@ void abrirMemoria()
 
     memoria_estado_fd =
         shm_open(memoria_estado_nombre,
-                 O_CREAT | O_RDWR | O_EXCL, 0664);
+                 O_CREAT | O_RDWR | O_EXCL, 0777);
     if (memoria_estado_fd == -1)
         fatal("Error creando shm estado");
     if (ftruncate(memoria_estado_fd, size_estado) == -1)
