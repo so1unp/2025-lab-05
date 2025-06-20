@@ -13,7 +13,12 @@
 #define _GNU_SOURCE
 
 
+void atenderSolicitud(struct SolicitudServidor solicitud);
+void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
 
+int moverJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
+int desconectarJugador(long pid);
+int buscarJugador(long pid);
 
 // =========================
 //      VARIABLES GLOBALES
@@ -644,9 +649,125 @@ int main(int argc, char *argv[])
             printf("- Columna: %i\n", solicitud.columna);
             printf("- Tipo: %c\n", solicitud.tipo);
         }
+        // atenderSolicitud(solicitud);
     }
 
     finish();
 
     exit(EXIT_SUCCESS);
+}
+
+void atenderSolicitud(struct SolicitudServidor solicitud) {
+    struct Jugador jugador; // el jugador que realizo la solicitud
+    struct Posicion posicion;
+    posicion = (struct Posicion) {solicitud.fila , solicitud.columna};
+    jugador.pid =solicitud.mtype;
+    jugador.posicion = posicion;
+    // TODO: jugador.nombre 
+    jugador.tipo = solicitud.tipo;
+    
+    struct RespuestaServidor respuesta;
+    respuesta.mtype = solicitud.mtype;
+
+    switch (solicitud.codigo) {
+    case CONEXION:
+        printf("Jugador (%ld) solicita conectarse...\n", jugador.pid);
+
+        if (aceptarJugador(&jugador)){
+            // TODO: colocar jugador en el mapa.
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "Jugador conectado con éxito");
+            respuesta.codigo = 1;
+        } else {
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "Intento fallido, no se conecto jugador");
+            respuesta.codigo = 0;
+        }
+        break;
+    case DESCONEXION:
+        printf("Jugador (%ld) solicita desconectarse...\n", jugador.pid);
+        if (desconectarJugador(jugador.pid) <0) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "no encontro al jugador");
+            respuesta.codigo = 0;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "Jugador desconectado con exito");
+            respuesta.codigo = 1;
+        }
+        break;
+    case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+        printf("Jugador (%ld) se mueve...\n", jugador.pid);
+        if (moverJugador(jugador, mapa) < 0) { 
+            // no deberia llegar aca pero por las dudas lo pongo
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "no encontro al jugador");
+            respuesta.codigo = 0;
+        }
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "Jugador se movio con exito");
+        respuesta.codigo = 1;
+        break;
+    case NOTIFICACION:
+        // TODO:
+        break;
+    default:
+        break;
+    }
+
+    responderSolicitud(solicitud.clave_mailbox_respuestas, &respuesta);
+}
+
+void responderSolicitud(int clave_mailbox_respuestas,
+     struct RespuestaServidor *respuesta) {
+    if (msgsnd(clave_mailbox_respuestas, respuesta,
+        sizeof(struct RespuestaServidor) - sizeof(long), 0) == -1) {
+       perror("🚫 msgsnd");
+    } else {
+        printf("Enviando respuesta al cliente:\n");
+        printf("- Mtype: %li\n", respuesta->mtype);
+        printf("- Codigo: %i\n", respuesta->codigo);
+        printf("- Mensaje: %s\n", respuesta->mensaje);
+   }   
+}
+
+// comparar y actualizar posicion de jugador en Jugadores y Mapa
+int moverJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
+    int pos = buscarJugador(jugador.pid);
+    if (pos < 0) return -1; // ocurrio algo
+
+    mapa[jugadores[pos].posicion.fila][jugadores[pos].posicion.columna] = VACIO;
+    jugadores[pos].posicion = jugador.posicion;
+    mapa[jugador.posicion.fila][jugador.posicion.columna] = jugador.tipo; 
+    return 0;
+}
+
+int desconectarJugador(long pid) {
+    int pos = buscarJugador(pid);
+    if (pos < 0) return -1;
+
+    mapa[jugadores[pos].posicion.fila]
+        [jugadores[pos].posicion.columna] = VACIO;
+
+    if (jugadores[pos].tipo == RAIDER)
+        estado->cant_raiders--;
+    else if (jugadores[pos].tipo == GUARDIAN)
+        estado->cant_guardianes--;
+    
+    int j;
+    for (j = pos; j < estado->cant_jugadores - 1; j++) {
+        jugadores[j] = jugadores[j + 1];
+    }
+    estado->cant_jugadores--;
+    return 0;
+}
+
+int buscarJugador(long pid) {
+    int i;
+    for (i = 0; i < estado->cant_jugadores; i++) {
+        if (jugadores[i].pid == pid) {
+            return i;
+        }
+    }
+    return -1;
 }
