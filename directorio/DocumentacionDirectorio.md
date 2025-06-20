@@ -1,243 +1,215 @@
-# Documentación del Directorio de Catacumbas
+# 📚 Documentación del Sistema de Directorio de Catacumbas
 
-## Descripción General
+## 🏗️ Arquitectura del Sistema
 
-El **Directorio de Catacumbas** es un servidor que implementa un registro centralizado de catacumbas utilizando colas de mensajes (message queues) para la comunicación entre procesos (IPC). El sistema permite a múltiples clientes realizar operaciones sobre un directorio compartido de manera concurrente.
+El sistema de directorio de catacumbas utiliza **colas de mensajes (message queues)** para la comunicación IPC entre el servidor y los clientes.
 
-## Arquitectura del Sistema
+### Componentes principales:
+- **Servidor (`server.c`)**: Mantiene el directorio centralizado de catacumbas
+- **Cliente de prueba (`clienteD.c`)**: Interfaz para interactuar con el directorio
+- **Cabeceras (`directorio.h`)**: Definiciones compartidas
 
-### Componentes Principales
+---
 
-1. **Servidor (`server.c`)**: Proceso que mantiene el directorio y procesa solicitudes
-2. **Cliente (`clienteD.c`)**: Programa de ejemplo para interactuar con el servidor
-3. **Estructuras de datos (`directorio.h`)**: Definiciones compartidas
+## 📊 Estructura de Datos
 
-### Sistema de Comunicación
-
-El sistema utiliza **dos colas de mensajes** independientes:
-
-- **Mailbox de Solicitudes** (Clave: 12345): Para enviar peticiones al servidor
-- **Mailbox de Respuestas** (Clave: 12346): Para recibir respuestas del servidor
-
-## Estructuras de Datos
-
-### Estructura de Solicitud
-```c
-struct solicitud {
-    long mtype;      // PID del cliente (requerido por msgsnd/msgrcv)
-    int tipo;        // Tipo de operación (OP_LISTAR, OP_AGREGAR, etc.)
-    char texto[MAX_TEXT]; // Datos de la solicitud
-};
-```
-
-### Estructura de Respuesta
-```c
-struct respuesta {
-    long mtype;      // PID del cliente destinatario
-    int codigo;      // Código de resultado (RESP_OK, RESP_ERROR)
-    int num_elementos; // Número de elementos en la respuesta
-    char datos[MAX_DATA]; // Datos de la respuesta
-};
-```
-
-### Estructura de Catacumba
+### `struct catacumba`
 ```c
 struct catacumba {
-    char nombre[MAX_NOM];     // Nombre único identificador de la catacumba
-    char direccion[MAX_RUTA]; // Ruta al archivo de memoria compartida de la catacumba
-    char mailbox[MAX_NOM];    // Mailbox de mensajes de la catacumba
-    int cantJug;              // Cantidad actual de jugadores en la catacumba
-    int cantMaxJug;           // Cantidad máxima de jugadores permitidos
+    int pid;                      // PID del proceso que maneja la catacumba
+    char nombre[MAX_NOM];         // Nombre único identificador 
+    char direccion[MAX_RUTA];     // Ruta de memoria compartida de la catacumba
+    char propCatacumba[MAX_RUTA]; // Ruta de memoria compartida de propiedades
+    char mailbox[MAX_NOM];        // Mailbox de mensajes de la catacumba
+    int cantJug;                  // Cantidad actual de jugadores
+    int cantMaxJug;               // Cantidad máxima de jugadores permitidos
 };
 ```
 
-## Formatos de Datos
+---
 
-### Formato de Agregar Catacumba
-Para agregar una nueva catacumba, el campo `texto` de la solicitud debe contener:
+## 🔄 Operaciones Disponibles
+
+### 1. **Listar Catacumbas (OP_LISTAR)**
+- **Solicitud**: Sin datos adicionales
+- **Respuesta**: Lista de todas las catacumbas registradas
+- **Formato de respuesta**: `nombre|direccion|propCatacumba|mailbox|cantJug|maxJug;...`
+
+### 2. **Agregar Catacumba (OP_AGREGAR)**
+- **Solicitud**: `nombrecat|dircat|dirpropcat|dirmailbox`
+- **Respuesta**: Confirmación de éxito o error
+- **Validaciones**: 
+  - Límite máximo de catacumbas (MAX_CATACUMBAS = 10)
+  - Formato correcto de entrada
+
+### 3. **Buscar Catacumba (OP_BUSCAR)**
+- **Solicitud**: `nombre_catacumba`
+- **Respuesta**: Datos de la catacumba encontrada
+- **Formato de respuesta**: `nombre|direccion|propCatacumba|mailbox|cantJug|maxJug`
+
+### 4. **Eliminar Catacumba (OP_ELIMINAR)**
+- **Solicitud**: `nombre_catacumba`
+- **Respuesta**: Confirmación de eliminación o error
+
+---
+
+## 🗂️ Persistencia de Datos
+
+### Archivo: `catacumbas_persistidas.dat`
+- **Formato**: Binario
+- **Estructura**: [número_catacumbas][struct catacumba][struct catacumba]...
+- **Funciones**:
+  - `cargarCatacumbas()`: Carga al iniciar el servidor
+  - `guardarCatacumbas()`: Guarda después de modificaciones
+
+### Características:
+- ✅ **Automática**: Se guarda automáticamente después de agregar/eliminar
+- ✅ **Completa**: Incluye todos los campos de la estructura `catacumba`
+- ✅ **Robusta**: Manejo de errores de E/S
+
+---
+
+## 🚀 Compilación y Ejecución
+
+### Compilar el Servidor:
+```bash
+gcc -Wall -Wextra -o server server.c
 ```
-"nombre|direccion|mailbox"
+
+### Compilar el Cliente:
+```bash
+gcc -Wall -Wextra -o clienteD clienteD.c
 ```
 
-Los campos de cantidad de jugadores (`cantJug` y `cantMaxJug`) se inicializan automáticamente en 0 y se actualizan consultando la dirección de la catacumba.
+### Ejecutar:
+```bash
+# 1. Iniciar el servidor (en una terminal)
+./server
 
-**Ejemplo**:
-```
-"Catacumba_Norte|/tmp/catacumba_norte.shm|mq_norte"
-```
-
-### Formato de Respuesta de Listado
-Las catacumbas se devuelven en el campo `datos` de la respuesta con el formato:
-```
-"cat1|dir1|mbox1|jugadores1|max1;cat2|dir2|mbox2|jugadores2|max2;..."
+# 2. Iniciar el cliente (en otra terminal)
+./clienteD
 ```
 
-**Ejemplo**:
-```
-"Catacumba_Norte|/tmp/catacumba_norte.shm|mq_norte|5|15;Catacumba_Sur|/tmp/catacumba_sur.shm|mq_sur|0|10"
-```
+---
 
-### Validaciones
-- Todos los campos (`nombre`, `direccion`, `mailbox`) son obligatorios
-- Los campos `cantJug` y `cantMaxJug` se inicializan automáticamente en 0
-- Los valores reales de jugadores se obtienen consultando la dirección de la catacumba
+## 📋 Códigos de Respuesta
 
-## Operaciones Soportadas
+| Código | Constante               | Descripción                    |
+| ------ | ----------------------- | ------------------------------ |
+| 1      | `RESP_OK`               | Operación exitosa              |
+| 2      | `RESP_ERROR`            | Error en la operación          |
+| 3      | `RESP_NO_ENCONTRADO`    | Elemento no encontrado         |
+| 4      | `RESP_LIMITE_ALCANZADO` | Máximo de catacumbas alcanzado |
 
-### 1. Listar Catacumbas (OP_LISTAR)
+---
 
-**Propósito**: Obtener una lista de todas las catacumbas registradas.
+## 🔧 Configuración
 
-**Solicitud**:
+### Constantes principales (en `directorio.h`):
 ```c
-struct solicitud msg;
-msg.mtype = getpid();          // PID del cliente
-msg.tipo = OP_LISTAR;          // Tipo de operación
-msg.texto[0] = '\0';           // No se requiere texto
+#define MAX_CATACUMBAS 10        // Máximo número de catacumbas
+#define MAX_NOM 50               // Longitud máxima del nombre
+#define MAX_RUTA 100             // Longitud máxima de rutas
+#define MAX_TEXT 4096            // Tamaño máximo de mensajes
+#define MAX_DAT_RESP 4096        // Tamaño máximo de respuestas
 ```
 
-**Respuesta**:
+### Claves de mailboxes:
 ```c
-struct respuesta resp;
-// resp.mtype = PID del cliente
-// resp.codigo = RESP_OK
-// resp.num_elementos = número de catacumbas
-// resp.datos = "Catacumba1|Dir1|Mailbox1|0|10;Catacumba2|Dir2|Mailbox2|5|20;..."
+#define MAILBOX_KEY 12345              // Mailbox de solicitudes
+#define MAILBOX_RESPUESTA_KEY 12346    // Mailbox de respuestas
 ```
 
-**Formato de datos**: Cada catacumba se representa como `"nombre|direccion|mailbox|cantJug|maxJug"` y múltiples catacumbas se separan con `;`
+---
 
-### 2. Agregar Catacumba (OP_AGREGAR)
+## 🛡️ Manejo de Señales
 
-**Propósito**: Registrar una nueva catacumba en el directorio con información completa.
+### Terminación limpia:
+- **SIGINT (Ctrl+C)**: Guarda estado y libera recursos
+- **SIGTERM**: Terminación controlada del sistema
+- **Limpieza automática**: Elimina mailboxes del sistema
 
-**Solicitud**:
-```c
-struct solicitud msg;
-msg.mtype = getpid();
-msg.tipo = OP_AGREGAR;
-strcpy(msg.texto, "NombreCatacumba|DireccionCatacumba|MailboxCatacumba");
+---
+
+## 🎯 Ejemplo de Uso
+
+### Agregar una catacumba:
+```
+Entrada del cliente:
+├─ Nombre: "MiCatacumba"
+├─ Dirección: "/tmp/catacumba1.dat"
+├─ Propiedades: "/tmp/props1.dat"
+└─ Mailbox: "mailbox1"
+
+Formato enviado: "MiCatacumba|/tmp/catacumba1.dat|/tmp/props1.dat|mailbox1"
 ```
 
-**Formato del texto**: `"nombre|direccion|mailbox"`
-- `nombre`: Nombre único de la catacumba
-- `direccion`: Ruta al archivo de memoria compartida
-- `mailbox`: Identificador del mailbox de la catacumba
-
-**Nota**: Los campos `cantJug` y `cantMaxJug` se inicializan automáticamente en 0. Los valores reales se obtienen consultando la dirección de la catacumba.
-
-**Respuesta**:
-```c
-// Éxito:
-// resp.codigo = RESP_OK
-// resp.datos = "Catacumba agregada correctamente."
-
-// Error (directorio lleno):
-// resp.codigo = RESP_LIMITE_ALCANZADO
-// resp.datos = "Error: máximo de catacumbas alcanzado."
-
-// Error (formato incorrecto):
-// resp.codigo = RESP_ERROR
-// resp.datos = "Error: formato incorrecto. Use 'nombre|direccion|mailbox'"
+### Respuesta del listado:
+```
+MiCatacumba|/tmp/catacumba1.dat|/tmp/props1.dat|mailbox1|0|0;OtraCat|/tmp/cat2.dat|/tmp/props2.dat|mailbox2|5|10
 ```
 
-### 3. Buscar Catacumba (OP_BUSCAR)
+---
 
-**Propósito**: Encontrar una catacumba específica por su nombre.
+## 🔍 Notas Técnicas
 
-**Solicitud**:
+### Cambios recientes:
+- ✅ **Nuevo campo**: `propCatacumba` agregado a la estructura
+- ✅ **Formato actualizado**: Ahora requiere 4 campos para agregar
+- ✅ **Persistencia completa**: El nuevo campo se guarda automáticamente
+- ✅ **Cliente actualizado**: Interfaz de usuario adaptada al nuevo formato
+
+### Compatibilidad:
+- ⚠️ **Archivos de persistencia antiguos**: No son compatibles con la nueva estructura
+- 🔄 **Migración**: Eliminar `catacumbas_persistidas.dat` antes de usar la nueva versión
+
+---
+
+## 🐛 Solución de Problemas
+
+### Error "No such file or directory" en mailboxes:
+- **Causa**: El servidor no está ejecutándose
+- **Solución**: Iniciar `./server` antes que el cliente
+
+### Error de formato en agregar catacumba:
+- **Causa**: Faltan campos en la entrada
+- **Formato correcto**: `nombre|direccion|propiedades|mailbox`
+
+### Error de límite alcanzado:
+- **Causa**: Se alcanzó el máximo de 10 catacumbas
+- **Solución**: Eliminar catacumbas existentes o aumentar `MAX_CATACUMBAS`
+
+---
+
+## 📚 Sistema de Comunicación IPC
+
+### Mailboxes utilizados:
+- **Solicitudes** (Clave: 12345): Cliente → Servidor
+- **Respuestas** (Clave: 12346): Servidor → Cliente
+
+### Protocolo de comunicación:
+1. Cliente envía solicitud con su PID como `mtype`
+2. Servidor procesa y responde usando el mismo PID
+3. Cliente recibe solo sus respuestas usando filtro por PID
+
+### Ejemplo de protocolo:
 ```c
-struct solicitud msg;
-msg.mtype = getpid();
-msg.tipo = OP_BUSCAR;
-strcpy(msg.texto, "NombreBuscado");
-```
-
-**Respuesta**:
-```c
-// Encontrada:
-// resp.codigo = RESP_OK
-// resp.num_elementos = 1
-// resp.datos = "NombreCatacumba|DireccionCatacumba|MailboxCatacumba|5|10"
-
-// No encontrada:
-// resp.codigo = RESP_NO_ENCONTRADO
-// resp.datos = "Catacumba no encontrada."
-```
-
-### 4. Eliminar Catacumba (OP_ELIMINAR)
-
-**Propósito**: Remover una catacumba del directorio.
-
-**Solicitud**:
-```c
-struct solicitud msg;
-msg.mtype = getpid();
-msg.tipo = OP_ELIMINAR;
-strcpy(msg.texto, "NombreAEliminar");
-```
-
-**Respuesta**:
-```c
-// Eliminada:
-// resp.codigo = RESP_OK
-// resp.datos = "Catacumba eliminada correctamente."
-
-// No encontrada:
-// resp.codigo = RESP_NO_ENCONTRADO
-// resp.datos = "Catacumba no encontrada."
-```
-
-## Protocolo de Comunicación
-
-### Envío de Solicitudes
-
-1. **Conectar a los mailboxes**:
-```c
-int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
-int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
-```
-
-2. **Preparar la solicitud**:
-```c
-struct solicitud msg;
-msg.mtype = getpid();  // ¡IMPORTANTE! Usar el PID del proceso
-msg.tipo = OP_LISTAR;  // Tipo de operación deseada
-// Completar msg.texto según la operación
-```
-
-3. **Enviar la solicitud**:
-```c
-if (msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
-    perror("Error al enviar solicitud");
-}
-```
-
-### Recepción de Respuestas
-
-**⚠️ PUNTO CRÍTICO**: Usar el PID propio para filtrar mensajes
-
-```c
-struct respuesta resp;
+// Cliente
 pid_t mi_pid = getpid();
+msg.mtype = mi_pid;  // Identificador único
+msgsnd(mailbox_solicitudes, &msg, ...);
 
-// Recibir SOLO mensajes dirigidos a este proceso
-if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1) {
-    perror("Error al recibir respuesta");
-} else {
-    printf("Código de respuesta: %d\n", resp.codigo);
-    printf("Datos: %s\n", resp.datos);
-    if (resp.num_elementos > 0) {
-        printf("Número de elementos: %d\n", resp.num_elementos);
-    }
-}
+// Servidor  
+resp.mtype = msg.mtype;  // Usar mismo PID para respuesta
+msgsnd(mailbox_respuestas, &resp, ...);
+
+// Cliente
+msgrcv(mailbox_respuestas, &resp, ..., mi_pid, 0);  // Filtrar por PID
 ```
 
-### ¿Por qué es importante el PID en msgrcv?
+---
 
-El tercer parámetro de `msgrcv()` filtra los mensajes por tipo (`mtype`). Al usar el PID:
-
-- **Sin filtro** (`msgrcv(..., 0, ...)`): El cliente podría recibir respuestas destinadas a otros clientes
+*Documentación actualizada - Versión con soporte completo para propiedades de catacumbas*
 - **Con filtro PID** (`msgrcv(..., mi_pid, ...)`): Solo recibe sus propias respuestas
 
 ## Códigos de Ejemplo

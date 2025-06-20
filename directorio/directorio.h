@@ -28,7 +28,7 @@
 #define MAX_RUTA 100
 
 /** @brief Longitud máxima para el texto de un mensaje */
-#define MAX_TEXT 100
+#define MAX_TEXT 4096
 
 /** @brief Longitud máxima para los datos de una respuesta */
 #define MAX_DAT_RESP 4096
@@ -79,12 +79,13 @@
  */
 struct catacumba
 {
-    int pid;                  /**< PID del proceso que maneja la catacumba */
-    char nombre[MAX_NOM];     /**< Nombre único identificador de la catacumba */
-    char direccion[MAX_RUTA]; /**< Ruta al archivo de memoria compartida de la catacumba */
-    char mailbox[MAX_NOM];    /**< Ruta al mailbox de mensajes de la catacumba */
-    int cantJug;              /**< Cantidad de jugadores en la catacumba */
-    int cantMaxJug;           /**< Cantidad máxima de jugadores permitidos en la catacumba */
+    int pid;                      /**< PID del proceso que maneja la catacumba */
+    char nombre[MAX_NOM];         /**< Nombre único identificador de la catacumba */
+    char direccion[MAX_RUTA];     /**< Ruta al archivo de memoria compartida de la catacumba */
+    char propCatacumba[MAX_RUTA]; /**< Ruta al archivo de memoria compartida de las propiedades la catacumba */
+    char mailbox[MAX_NOM];        /**< Ruta al mailbox de mensajes de la catacumba */
+    int cantJug;                  /**< Cantidad de jugadores en la catacumba */
+    int cantMaxJug;               /**< Cantidad máxima de jugadores permitidos en la catacumba */
 };
 
 /**
@@ -113,13 +114,6 @@ struct respuesta
     char datos[MAX_DAT_RESP]; /**< Datos de respuesta (lista de catacumbas, mensajes, etc.) */
     int num_elementos;        /**< Número de elementos en la respuesta (útil para listados) */
 };
-
-typedef struct
-{
-    long mtype;
-    char nombre_catacumba[50];
-    int pid;
-} mensajeEstoyVivo;
 
 // ==================== PROTOTIPOS DE FUNCIONES DE PERSISTENCIA ====================
 

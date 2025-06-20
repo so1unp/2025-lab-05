@@ -64,7 +64,7 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
  * @brief Agrega una nueva catacumba al directorio
  * @param catacumbas Array donde se almacenan las catacumbas
  * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
- * @param msg Mensaje de solicitud con los datos de la catacumba (formato: "nombre|direccion|mailbox")
+ * @param msg Mensaje de solicitud con los datos de la catacumba (formato: "nombrecat|dircat|dirpropcat|dirmailbox")
  * @param resp Puntero a la estructura de respuesta donde se almacenará el resultado
  **/
 void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp);
@@ -311,7 +311,7 @@ void enviarRespuesta(int mailbox_respuestas_id, struct respuesta *resp)
  * @brief Lista todas las catacumbas registradas en el directorio
  *
  * Construye una cadena de texto con todas las catacumbas disponibles en formato
- * "nombre|direccion|mailbox|cantJug|maxJug" separadas por ";" y la almacena
+ * "nombre|direccion|propCatacumba|mailbox|cantJug|maxJug" separadas por ";" y la almacena
  * en la estructura de respuesta. Si no hay catacumbas, informa que el directorio está vacío.
  *
  * @param resp Puntero a la estructura de respuesta donde se almacenará el resultado
@@ -332,10 +332,11 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
 
         for (int i = 0; i < *num_catacumbas; i++)
         {
-            char temp[300]; // Buffer para una catacumba en formato |
-            snprintf(temp, sizeof(temp), "%s|%s|%s|%d|%d",
+            char temp[MAX_TEXT]; // Buffer para una catacumba en formato | (usando MAX_TEXT de directorio.h)
+            snprintf(temp, sizeof(temp), "%s|%s|%s|%s|%d|%d",
                      catacumbas[i].nombre,
                      catacumbas[i].direccion,
+                     catacumbas[i].propCatacumba,
                      catacumbas[i].mailbox,
                      catacumbas[i].cantJug,
                      catacumbas[i].cantMaxJug);
@@ -352,9 +353,10 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
                 }
             }
 
-            printf("   %d. %-15s | %-20s | %-10s | %d/%d jugadores\n",
+            printf("   %d. %-15s | %-20s | %-20s | %-10s | %d/%d jugadores\n",
                    i + 1, catacumbas[i].nombre, catacumbas[i].direccion,
-                   catacumbas[i].mailbox, catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
+                   catacumbas[i].propCatacumba, catacumbas[i].mailbox,
+                   catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
         }
         printf("\n✅ Listado completado (%d catacumbas enviadas)\n\n", *num_catacumbas);
     }
@@ -368,14 +370,14 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
 /**
  * @brief Agrega una nueva catacumba al directorio
  *
- * Procesa el mensaje del cliente que debe contener el nombre, dirección y mailbox
- * de la catacumba en formato "nombre|direccion|mailbox". Los campos de cantidad
+ * Procesa el mensaje del cliente que debe contener el nombre, dirección, propiedades y mailbox
+ * de la catacumba en formato "nombrecat|dircat|dirpropcat|dirmailbox". Los campos de cantidad
  * de jugadores se inicializan automáticamente (cantJug=0, maxJug=0). Valida que
  * no se exceda el límite máximo de catacumbas y que el formato sea correcto.
  *
  * @param catacumbas Array donde se almacenan las catacumbas
  * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
- * @param msg Mensaje de solicitud con los datos de la catacumba
+ * @param msg Mensaje de solicitud con los datos de la catacumba (formato: "nombrecat|dircat|dirpropcat|dirmailbox")
  * @param resp Puntero a la estructura de respuesta donde se almacenará el resultado
  **/
 void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp)
@@ -390,12 +392,13 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
         strncpy(texto_copia, msg->texto, MAX_TEXT - 1);
         texto_copia[MAX_TEXT - 1] = '\0';
 
-        // Parsear el mensaje en formato "nombre|direccion|mailbox"
+        // Parsear el mensaje en formato "nombrecat|dircat|dirpropcat|dirmailbox"
         char *nombre = strtok(texto_copia, "|");
         char *direccion = strtok(NULL, "|");
+        char *propCatacumba = strtok(NULL, "|");
         char *mailbox = strtok(NULL, "|");
 
-        if (nombre != NULL && direccion != NULL && mailbox != NULL)
+        if (nombre != NULL && direccion != NULL && propCatacumba != NULL && mailbox != NULL)
         {
             // Copiar los campos básicos de la catacumba
             catacumbas[*num_catacumbas].pid = msg->mtype;                      // Asignar el PID del proceso actual
@@ -407,6 +410,9 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
             strncpy(catacumbas[*num_catacumbas].direccion, direccion, MAX_RUTA - 1);
             catacumbas[*num_catacumbas].direccion[MAX_RUTA - 1] = '\0';
 
+            strncpy(catacumbas[*num_catacumbas].propCatacumba, propCatacumba, MAX_RUTA - 1);
+            catacumbas[*num_catacumbas].propCatacumba[MAX_RUTA - 1] = '\0';
+
             strncpy(catacumbas[*num_catacumbas].mailbox, mailbox, MAX_NOM - 1);
             catacumbas[*num_catacumbas].mailbox[MAX_NOM - 1] = '\0';
 
@@ -417,10 +423,11 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
 
             (*num_catacumbas)++; // Incrementar el contador
 
-            printf("   ├─ Nombre:     \"%s\"\n", nombre);
-            printf("   ├─ Dirección:  \"%s\"\n", direccion);
-            printf("   ├─ Mailbox:    \"%s\"\n", mailbox);
-            printf("   └─ Estado:     Inicializada (0/0 jugadores)\n");
+            printf("   ├─ Nombre:        \"%s\"\n", nombre);
+            printf("   ├─ Dirección:     \"%s\"\n", direccion);
+            printf("   ├─ Propiedades:   \"%s\"\n", propCatacumba);
+            printf("   ├─ Mailbox:       \"%s\"\n", mailbox);
+            printf("   └─ Estado:        Inicializada (0/0 jugadores)\n");
             printf("\n✅ Catacumba agregada correctamente (Total: %d/%d)\n\n", *num_catacumbas, MAX_CATACUMBAS);
 
             // Configurar respuesta exitosa
@@ -437,9 +444,9 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
         {
             // Error: formato incorrecto
             printf("   ❌ Error: formato incorrecto - faltan campos.\n");
-            printf("      Formato esperado: 'nombre|direccion|mailbox'\n\n");
+            printf("      Formato esperado: 'nombrecat|dircat|dirpropcat|dirmailbox'\n\n");
             resp->codigo = RESP_ERROR;
-            strcpy(resp->datos, "Error: formato incorrecto. Use 'nombre|direccion|mailbox'");
+            strcpy(resp->datos, "Error: formato incorrecto. Use 'nombrecat|dircat|dirpropcat|dirmailbox'");
         }
     }
     else
@@ -456,7 +463,7 @@ void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct
  *
  * Recorre el array de catacumbas buscando una que coincida con el nombre
  * proporcionado en la solicitud. Si la encuentra, devuelve sus datos en formato
- * "nombre|direccion|mailbox|cantJug|maxJug"; si no, informa que no fue encontrada.
+ * "nombre|direccion|propCatacumba|mailbox|cantJug|maxJug"; si no, informa que no fue encontrada.
  *
  * @param catacumbas Array de catacumbas donde buscar
  * @param num_catacumbas Puntero al número actual de catacumbas
@@ -472,17 +479,19 @@ void buscarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct 
     {
         if (strcmp(catacumbas[i].nombre, msg->texto) == 0)
         {
-            printf("   ├─ Nombre:     \"%s\"\n", catacumbas[i].nombre);
-            printf("   ├─ Dirección:  \"%s\"\n", catacumbas[i].direccion);
-            printf("   ├─ Mailbox:    \"%s\"\n", catacumbas[i].mailbox);
-            printf("   └─ Jugadores:  %d/%d\n", catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
+            printf("   ├─ Nombre:        \"%s\"\n", catacumbas[i].nombre);
+            printf("   ├─ Dirección:     \"%s\"\n", catacumbas[i].direccion);
+            printf("   ├─ Propiedades:   \"%s\"\n", catacumbas[i].propCatacumba);
+            printf("   ├─ Mailbox:       \"%s\"\n", catacumbas[i].mailbox);
+            printf("   └─ Jugadores:     %d/%d\n", catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
             printf("\n✅ Catacumba encontrada y datos enviados\n\n");
 
             resp->codigo = RESP_OK;
             resp->num_elementos = 1;
-            snprintf(resp->datos, MAX_DAT_RESP, "%s|%s|%s|%d|%d",
+            snprintf(resp->datos, MAX_DAT_RESP, "%s|%s|%s|%s|%d|%d",
                      catacumbas[i].nombre, catacumbas[i].direccion,
-                     catacumbas[i].mailbox, catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
+                     catacumbas[i].propCatacumba, catacumbas[i].mailbox,
+                     catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
             encontrado = 1;
             break;
         }
@@ -539,6 +548,7 @@ void eliminarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struc
         {
             strcpy(catacumbas[i].nombre, catacumbas[i + 1].nombre);
             strcpy(catacumbas[i].direccion, catacumbas[i + 1].direccion);
+            strcpy(catacumbas[i].propCatacumba, catacumbas[i + 1].propCatacumba);
             strcpy(catacumbas[i].mailbox, catacumbas[i + 1].mailbox);
             catacumbas[i].cantJug = catacumbas[i + 1].cantJug;
             catacumbas[i].cantMaxJug = catacumbas[i + 1].cantMaxJug;
@@ -629,8 +639,9 @@ int cargarCatacumbas(struct catacumba catacumbas[], int *num_catacumbas)
         printf("   📋 Catacumbas cargadas desde archivo:\n");
         for (int i = 0; i < *num_catacumbas; i++)
         {
-            printf("     %d. %-15s | %-20s | %-10s\n",
-                   i + 1, catacumbas[i].nombre, catacumbas[i].direccion, catacumbas[i].mailbox);
+            printf("     %d. %-15s | %-20s | %-20s | %-10s\n",
+                   i + 1, catacumbas[i].nombre, catacumbas[i].direccion,
+                   catacumbas[i].propCatacumba, catacumbas[i].mailbox);
         }
     }
 
