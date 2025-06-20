@@ -77,11 +77,12 @@ void mostrar_catacumbas_formateadas(char *datos)
 
                 char *nombre = strtok(catacumba_copia, "|");
                 char *direccion = strtok(NULL, "|");
+                char *propCatacumba = strtok(NULL, "|");
                 char *mailbox = strtok(NULL, "|");
                 char *cantJug_str = strtok(NULL, "|");
                 char *maxJug_str = strtok(NULL, "|");
 
-                if (nombre && direccion && mailbox && cantJug_str && maxJug_str)
+                if (nombre && direccion && propCatacumba && mailbox && cantJug_str && maxJug_str)
                 {
                     int cantJug = atoi(cantJug_str);
                     int maxJug = atoi(maxJug_str);
@@ -90,18 +91,20 @@ void mostrar_catacumbas_formateadas(char *datos)
                     if (num_catacumbas > 1)
                     {
                         printf("\n🏛️  Catacumba #%d:\n", index);
-                        printf("   ├─ 📝 Nombre:     \"%s\"\n", nombre);
-                        printf("   ├─ 📍 Dirección:  \"%s\"\n", direccion);
-                        printf("   ├─ 📬 Mailbox:    \"%s\"\n", mailbox);
-                        printf("   └─ 👥 Jugadores:  %d/%d", cantJug, maxJug);
+                        printf("   ├─ 📝 Nombre:        \"%s\"\n", nombre);
+                        printf("   ├─ 📍 Dirección:     \"%s\"\n", direccion);
+                        printf("   ├─ 🏗️  Propiedades:   \"%s\"\n", propCatacumba);
+                        printf("   ├─ 📬 Mailbox:       \"%s\"\n", mailbox);
+                        printf("   └─ 👥 Jugadores:     %d/%d", cantJug, maxJug);
                     }
                     else
                     {
                         printf("\n🏛️  Información de la catacumba:\n");
-                        printf("   ├─ 📝 Nombre:     \"%s\"\n", nombre);
-                        printf("   ├─ 📍 Dirección:  \"%s\"\n", direccion);
-                        printf("   ├─ 📬 Mailbox:    \"%s\"\n", mailbox);
-                        printf("   └─ 👥 Jugadores:  %d/%d", cantJug, maxJug);
+                        printf("   ├─ 📝 Nombre:        \"%s\"\n", nombre);
+                        printf("   ├─ 📍 Dirección:     \"%s\"\n", direccion);
+                        printf("   ├─ 🏗️  Propiedades:   \"%s\"\n", propCatacumba);
+                        printf("   ├─ 📬 Mailbox:       \"%s\"\n", mailbox);
+                        printf("   └─ 👥 Jugadores:     %d/%d", cantJug, maxJug);
                     }
 
                     // Indicador visual del estado
@@ -124,10 +127,12 @@ void mostrar_catacumbas_formateadas(char *datos)
                     if (num_catacumbas > 1)
                     {
                         printf("%d. Datos incompletos: %s\n", index, catacumba);
+                        printf("   ⚠️  Formato esperado: nombre|direccion|propiedades|mailbox|cantJug|maxJug\n");
                     }
                     else
                     {
                         printf("Datos incompletos: %s\n", catacumba);
+                        printf("   ⚠️  Formato esperado: nombre|direccion|propiedades|mailbox|cantJug|maxJug\n");
                     }
                 }
 
@@ -249,6 +254,12 @@ int main()
             strncat(msg.texto, "|", MAX_TEXT - strlen(msg.texto) - 1);
             strncat(msg.texto, buffer, MAX_TEXT - strlen(msg.texto) - 1);
 
+            printf("🏗️  Ingrese dirección de propiedades: ");
+            fgets(buffer, sizeof(buffer), stdin);
+            buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar el salto de línea
+            strncat(msg.texto, "|", MAX_TEXT - strlen(msg.texto) - 1);
+            strncat(msg.texto, buffer, MAX_TEXT - strlen(msg.texto) - 1);
+
             printf("📬 Ingrese mailbox de la catacumba: ");
             fgets(buffer, sizeof(buffer), stdin);
             buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar el salto de línea
@@ -256,6 +267,7 @@ int main()
             strncat(msg.texto, buffer, MAX_TEXT - strlen(msg.texto) - 1);
 
             printf("\n📤 Enviando datos: %s\n", msg.texto);
+            printf("ℹ️  Formato: nombre|direccion|propiedades|mailbox\n");
 
             if (msgsnd(mailbox_solicitudes_id, &msg, sizeof(msg) - sizeof(long), 0) == -1)
             {
