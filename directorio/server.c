@@ -10,7 +10,7 @@
 #include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <time.h>
+#include <pthread.h>
 #include "directorio.h"
 
 // ==================== VARIABLES GLOBALES PARA LIMPIEZA ====================
@@ -20,6 +20,11 @@ static int mailbox_solicitudes_global = -1;
 static int mailbox_respuestas_global = -1;
 static struct catacumba *catacumbas_global = NULL;
 static int *num_catacumbas_global = NULL;
+
+// Variables globales para el hilo de ping
+static pthread_t hilo_ping;
+static volatile bool servidor_activo = true;
+static pthread_mutex_t mutex_catacumbas = PTHREAD_MUTEX_INITIALIZER;
 
 // ==================== PROTOTIPOS DE FUNCIONES ====================
 
@@ -132,6 +137,18 @@ int guardarCatacumbas(struct catacumba catacumbas[], int num_catacumbas);
 void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
 
 /**
+ * @brief Función del hilo que ejecuta ping periódico
+ *
+ * Esta función se ejecuta en un hilo separado y realiza ping a las catacumbas
+ * cada segundo para verificar su estado. Utiliza mutex para acceso seguro
+ * a los datos compartidos.
+ *
+ * @param arg Puntero a los argumentos (no utilizado)
+ * @return NULL
+ **/
+void* hiloPing(void* arg);
+
+/**
  * @brief Función principal del servidor de directorio
  *
  * Inicializa los mailboxes de comunicación y mantiene un bucle infinito
@@ -213,17 +230,19 @@ int main(int argc, char *argv[])
     printf("           SERVIDOR LISTO - ESPERANDO SOLICITUDES              \n");
     printf("═══════════════════════════════════════════════════════════════\n\n");
 
+    // ==================== INICIALIZACIÓN DEL HILO DE PING ====================
+    printf("🔄 Iniciando hilo de ping...\n");
+    if (pthread_create(&hilo_ping, NULL, hiloPing, NULL) != 0)
+    {
+        perror("Error al crear hilo de ping");
+        limpiarMailboxes();
+        exit(EXIT_FAILURE);
+    }
+    printf("✓ Hilo de ping iniciado correctamente\n\n");
+
     // ==================== BUCLE PRINCIPAL ====================
-    time_t tiempo_anterior = time(NULL);
-
     while (1)
-    {   
-        if (difftime(time(NULL), tiempo_anterior) >= 1) {
-            printf("------------------------------- REALIZANDO PING -------------------------------");
-            estadoServidor(catacumbas, &num_catacumbas);
-            tiempo_anterior = time(NULL);
-        }
-
+    {
         // Recibir solicitud del cliente (función bloqueante)
         RecibirSolicitudes(&recibido, mailbox_solicitudes_id, &msg);
 
@@ -233,7 +252,8 @@ int main(int argc, char *argv[])
         resp.datos[0] = '\0';   // Limpiar buffer de datos
 
         // ==================== PROCESAMIENTO DE SOLICITUDES ====================
-        // Procesar la solicitud según el tipo de operación solicitada
+        // Procesar la solicitud según el tipo de operación solicitada (con mutex para proteger datos compartidos)
+        pthread_mutex_lock(&mutex_catacumbas);
         switch (msg.tipo)
         {
         case OP_LISTAR:
@@ -259,6 +279,7 @@ int main(int argc, char *argv[])
             strcpy(resp.datos, "Operación desconocida.");
             break;
         }
+        pthread_mutex_unlock(&mutex_catacumbas);
 
         // Enviar respuesta al cliente que hizo la solicitud
         enviarRespuesta(mailbox_respuestas_id, &resp);
@@ -383,16 +404,22 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
  * @param catacumbas Array donde se almacenan las catacumbas
  * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
  **/
-void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas) 
+void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
 {
     for (int i = 0; i < *num_catacumbas; i++)
     {
-        if (kill(catacumbas[i].pid, 0) == 0) {
+        if (kill(catacumbas[i].pid, 0) == 0)
+        {
             printf("✅  Petición enviada a la catacumba: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
-        } else {
-            if (errno == EPERM) {
-               printf("⚠️  No se dispone de los permisos necesarios para enviar la solicitud a la catacumba: %d, %s \n", catacumbas[i].pid, catacumbas[i].nombre); 
-            } else if (errno == ESRCH) {
+        }
+        else
+        {
+            if (errno == EPERM)
+            {
+                printf("⚠️  No se dispone de los permisos necesarios para enviar la solicitud a la catacumba: %d, %s \n", catacumbas[i].pid, catacumbas[i].nombre);
+            }
+            else if (errno == ESRCH)
+            {
 
                 for (int j = i; j < *num_catacumbas - 1; j++)
                 {
@@ -412,8 +439,9 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
                 }
 
                 printf("⚠️  Catacumba eliminada: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
-
-            } else {
+            }
+            else
+            {
                 perror("❌ Error desconocido al verificar proceso");
             }
         }
@@ -813,6 +841,12 @@ void manejarSenalTerminacion(int sig)
         }
     }
 
+    // Terminar el hilo de ping
+    printf("🔄 Terminando hilo de ping...\n");
+    servidor_activo = false;
+    pthread_join(hilo_ping, NULL);
+    printf("✅ Hilo de ping terminado correctamente\n");
+
     // Limpiar mailboxes del sistema
     printf("🧹 Limpiando mailboxes del sistema...\n");
     limpiarMailboxes();
@@ -870,4 +904,42 @@ void limpiarMailboxes(void)
     {
         printf("  ⚠️  Se encontraron %d errores durante la limpieza\n", errores);
     }
+}
+
+// ==================== IMPLEMENTACIÓN DE FUNCIÓN DE HILO DE PING ====================
+
+/**
+ * @brief Función del hilo que ejecuta ping periódico
+ *
+ * Esta función se ejecuta en un hilo separado y realiza ping a las catacumbas
+ * cada segundo para verificar su estado. Utiliza mutex para acceso seguro
+ * a los datos compartidos.
+ *
+ * @param arg Puntero a los argumentos (no utilizado)
+ * @return NULL
+ **/
+void* hiloPing(void* arg)
+{
+    printf("🔄 Hilo de ping iniciado - ejecutando cada 1 segundo\n");
+    
+    while (servidor_activo)
+    {
+        sleep(1); // Esperar 1 segundo
+        
+        if (!servidor_activo) break; // Verificar si el servidor sigue activo
+        
+        // Acceso seguro a las catacumbas con mutex
+        pthread_mutex_lock(&mutex_catacumbas);
+        
+        if (catacumbas_global != NULL && num_catacumbas_global != NULL)
+        {
+            printf("------------------------------- REALIZANDO PING -------------------------------\n");
+            estadoServidor(catacumbas_global, num_catacumbas_global);
+        }
+        
+        pthread_mutex_unlock(&mutex_catacumbas);
+    }
+    
+    printf("🔄 Hilo de ping terminando...\n");
+    return NULL;
 }

@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-std=c99
+LDFLAGS=-pthread
 
 PROGS=server clienteD
 
@@ -7,7 +8,7 @@ PROGS=server clienteD
 all: $(PROGS)
 
 %: %.c
-	$(CC) -o $@ $< $(CFLAGS)
+	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS)
 
 .PHONY: clean
 clean:
