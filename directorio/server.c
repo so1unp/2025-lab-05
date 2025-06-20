@@ -10,6 +10,7 @@
 #include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <time.h>
 #include "directorio.h"
 
 // ==================== VARIABLES GLOBALES PARA LIMPIEZA ====================
@@ -128,7 +129,7 @@ int guardarCatacumbas(struct catacumba catacumbas[], int num_catacumbas);
  *
  * @return true si el servidor está activo, false en caso contrario
  **/
-bool estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
+void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
 
 /**
  * @brief Función principal del servidor de directorio
@@ -176,6 +177,7 @@ int main(int argc, char *argv[])
     if (cargarCatacumbas(catacumbas, &num_catacumbas) == 0)
     {
         printf("✅ Se cargaron %d catacumbas desde el archivo de persistencia\n", num_catacumbas);
+        estadoServidor(catacumbas, &num_catacumbas);
     }
     else
     {
@@ -212,8 +214,16 @@ int main(int argc, char *argv[])
     printf("═══════════════════════════════════════════════════════════════\n\n");
 
     // ==================== BUCLE PRINCIPAL ====================
+    time_t tiempo_anterior = time(NULL);
+
     while (1)
-    {
+    {   
+        if (difftime(time(NULL), tiempo_anterior) >= 1) {
+            printf("------------------------------- REALIZANDO PING -------------------------------");
+            estadoServidor(catacumbas, &num_catacumbas);
+            tiempo_anterior = time(NULL);
+        }
+
         // Recibir solicitud del cliente (función bloqueante)
         RecibirSolicitudes(&recibido, mailbox_solicitudes_id, &msg);
 
@@ -254,7 +264,6 @@ int main(int argc, char *argv[])
         enviarRespuesta(mailbox_respuestas_id, &resp);
     }
 
-    // Nunca llega aquí, pero buena práctica
     exit(EXIT_SUCCESS);
 }
 
@@ -364,6 +373,50 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
     {
         strcpy(resp->datos, "No hay catacumbas registradas.");
         printf("   ℹ️  No hay catacumbas registradas en el directorio.\n\n");
+    }
+}
+
+/**
+ * @brief Obtiene el estado de todas las catacumbas de la lista
+ *
+ *
+ * @param catacumbas Array donde se almacenan las catacumbas
+ * @param num_catacumbas Puntero al número actual de catacumbas (se incrementa si se agrega)
+ **/
+void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas) 
+{
+    for (int i = 0; i < *num_catacumbas; i++)
+    {
+        if (kill(catacumbas[i].pid, 0) == 0) {
+            printf("✅  Petición enviada a la catacumba: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
+        } else {
+            if (errno == EPERM) {
+               printf("⚠️  No se dispone de los permisos necesarios para enviar la solicitud a la catacumba: %d, %s \n", catacumbas[i].pid, catacumbas[i].nombre); 
+            } else if (errno == ESRCH) {
+
+                for (int j = i; j < *num_catacumbas - 1; j++)
+                {
+                    strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
+                    strcpy(catacumbas[j].direccion, catacumbas[j + 1].direccion);
+                    strcpy(catacumbas[j].propCatacumba, catacumbas[j + 1].propCatacumba);
+                    strcpy(catacumbas[j].mailbox, catacumbas[j + 1].mailbox);
+                    catacumbas[j].cantJug = catacumbas[j + 1].cantJug;
+                    catacumbas[j].cantMaxJug = catacumbas[j + 1].cantMaxJug;
+                }
+
+                (*num_catacumbas)--;
+
+                if (guardarCatacumbas(catacumbas, *num_catacumbas) != 0)
+                {
+                    printf("⚠️  Advertencia: No se pudo guardar la persistencia\n");
+                }
+
+                printf("⚠️  Catacumba eliminada: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
+
+            } else {
+                perror("❌ Error desconocido al verificar proceso");
+            }
+        }
     }
 }
 
