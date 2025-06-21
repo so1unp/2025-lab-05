@@ -40,12 +40,12 @@ int main(int argc, char *argv[]) {
     if (mailbox_solicitudes_id == -1) fatal("Error al conectar mailbox solicitud");
 
     key_t clave_mailbox_respuestas = mi_pid * MAILBOX_SOLICITUDES_SUFIJO;
-    mailbox_respuesta_id = msgget(clave_mailbox_respuestas, 0777 | IPC_CREAT);
+    mailbox_respuesta_id = msgget(clave_mailbox_respuestas , 0777 | IPC_CREAT);
     if (mailbox_respuesta_id == -1)
         fatal("Error al crear mailbox de respuesta");
         
     // accion primera la conexion del jugador
-    solicitud.mtype = 1;
+    solicitud.mtype = mi_pid;
     solicitud.codigo = CONEXION;
     solicitud.clave_mailbox_respuestas = clave_mailbox_respuestas;
     solicitud.fila = 0;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
 
     if (solicitud.clave_mailbox_respuestas == -1)
         fatal("Error al crear el mailbox de respuesta");
-    mailbox_respuesta_id = solicitud.clave_mailbox_respuestas;
+    
 
     printf("mensaje a la mailbox: %d\n",clave_server);
     imprimirSolicitud(&solicitud);
@@ -62,11 +62,11 @@ int main(int argc, char *argv[]) {
     if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1)
         fatal("Error al enviar solicitud de conexión");
         
-    if (msgrcv(mailbox_respuesta_id, &respuesta, sizeof(respuesta) - sizeof(long), 1, 0) == -1)
+    if (msgrcv(mailbox_respuesta_id, &respuesta, sizeof(respuesta) - sizeof(long), mi_pid, 0) == -1)
         fatal("Error al recibir respuesta del servidor"); 
         
     imprimirRespuesta(&respuesta);
-    if (respuesta.codigo) fatal("No fue posible conectarse. Finalizando...\n");   
+    if (!respuesta.codigo) fatal("No fue posible conectarse. Finalizando...\n");   
 }
 
 void fatal(char msg[]) {
@@ -92,6 +92,7 @@ void imprimirRespuesta(struct RespuestaServidor *respuesta) {
 
 void finalizar(){
     if (msgctl(mailbox_respuesta_id, IPC_RMID, NULL) == -1) {
+        printf("%d \n",mailbox_respuesta_id);
         perror("🚫 Error al eliminar el buzón de respuesta, por favor eliminelo manualmente con ipcs -q y luego ipcrm -q <id>");
         exit(EXIT_FAILURE);
     }

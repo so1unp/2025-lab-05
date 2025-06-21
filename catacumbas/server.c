@@ -571,7 +571,7 @@ int main(int argc, char *argv[])
         // Dejar que se bloquee 
         // Se desbloquea al detectar un mensaje
         struct SolicitudServidor solicitud;
-        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 1, 0) == -1) {
+        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0, 0) == -1) {
             perror("🚫 msgrcv");
         } else {
             printf("Mensaje recibido:\n");
