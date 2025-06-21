@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread -I../directorio
+CFLAGS=-Wall -Werror -g -pthread -I../directorio -lrt
 
 PROGS=server
 
