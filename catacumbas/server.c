@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -43,9 +44,7 @@ int mailbox_solicitudes_clave;
 int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
 int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 
-
-
-
+pthread_t hilo_solicitud;
 
 // =========================
 //      UTILS
@@ -81,19 +80,9 @@ void mostrarMapa() {
     printf("===========================\n");
 }
 
-
-
-
-
-
-
-
-
 // =========================
 //      MENSAJERIA
 // =========================
-
-
 /**
  * @brief enviar un mensaje a un cliente
  *  
@@ -108,13 +97,9 @@ void enviarRespuestaCliente(struct Jugador *jugador, int codigo, char *mensaje[]
  */
 void recibirSolicitudesClientes(int mailBox){
     // fijate que no sea bloqueante el msgrcv
-    while (1)
-    {
-        
-    }
-    
+    while (1) {   
+    }    
 }
-
 
 /**
  * @brief Leer el mailbox de respuestas del directorio
@@ -149,10 +134,6 @@ void enviarSolicitudDirectorio(struct solicitud *solicitud, struct respuesta *re
 
     recibirRespuestaDirectorio(respuesta);
 }
-
-
-
-
 
 // =========================
 //      GESTION MAPA
@@ -556,7 +537,6 @@ void setup(char rutaMapa[], char rutaConfig[])
 
 }
 
-
 // =========================
 //      MAIN
 // =========================
@@ -583,38 +563,6 @@ int main(int argc, char *argv[])
     }
     setup(argv[1], argv[2]);
 
-    /* 
-    // ---- Prueba de spawneo
-    mostrarMapa();
-    printf("\n[TEST] Agregando un jugador de prueba (Raider).\n");
-    struct Jugador jugador_prueba;
-    jugador_prueba.pid = getpid();
-    jugador_prueba.tipo = RAIDER;
-    strcpy(jugador_prueba.nombre, "R-Test");
-
-    if (aceptarJugador(&jugador_prueba) == EXIT_FAILURE)
-    { // EXIT_FAILURE (0) significa que se puede aceptar
-        jugadores[estado->cant_jugadores] = jugador_prueba;
-        if (jugador_prueba.tipo == RAIDER)
-        {
-            estado->cant_raiders++;
-        }
-        else if (jugador_prueba.tipo == GUARDIAN)
-        {
-            estado->cant_guardianes++;
-        }
-        estado->cant_jugadores++;
-        spawnearJugador(&jugadores[estado->cant_jugadores - 1]);
-        printf("[TEST] Jugador de prueba agregado y spawneado.\n");
-    }
-    else
-    {
-        printf("[TEST] No se pudo agregar el jugador de prueba.\n");
-    }
-    mostrarMapa();
-    // ---
-    */
-
     // ---
     // RECIBIR SOLICITUDES DE CLIENTES
     while (1) {
@@ -623,7 +571,7 @@ int main(int argc, char *argv[])
         // Dejar que se bloquee 
         // Se desbloquea al detectar un mensaje
         struct SolicitudServidor solicitud;
-        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 1, 0) == -1) {
+        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0, 0) == -1) {
             perror("🚫 msgrcv");
         } else {
             printf("Mensaje recibido:\n");
@@ -632,7 +580,7 @@ int main(int argc, char *argv[])
             printf("- Mailbox: %i\n", solicitud.clave_mailbox_respuestas);
             printf("- Fila: %i\n", solicitud.fila);
             printf("- Columna: %i\n", solicitud.columna);
-            printf("- Tipo: %c\n", solicitud.tipo);
+            printf("- Tipo: %c\n\n", solicitud.tipo);
         }
         atenderSolicitud(&solicitud);
     }
@@ -654,7 +602,9 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
 
     switch (solicitud->codigo) {
     case CONEXION:
-        printf("Jugador (%ld) solicita conectarse...\n", jugador.pid);
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\t\tJugador (%ld) solicita conectarse...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
         if (conectarJugador(&jugador) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Intento fallido, no se conecto jugador");
@@ -666,7 +616,9 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         }
         break;
     case DESCONEXION:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
         printf("Jugador (%ld) solicita desconectarse...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
         if (desconectarJugador(jugador.pid) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
@@ -678,7 +630,9 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         }
         break;
     case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+        printf("\n═══════════════════════════════════════════════════════════════\n");
         printf("Jugador (%ld) se mueve...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
         if (moverJugador(&jugador, mapa) < 0) { 
             // no deberia llegar aca pero por las dudas lo pongo
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
@@ -701,14 +655,20 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
 
 void responderSolicitud(int clave_mailbox_respuestas,
      struct RespuestaServidor *respuesta) {
-    if (msgsnd(clave_mailbox_respuestas, respuesta,
+    int id_mailbox_cliente = msgget(clave_mailbox_respuestas, 0);
+    if (id_mailbox_cliente == -1) {
+        perror("🚫 No se pudo obtener el ID del mailbox del cliente");
+        return;
+    }
+
+    if (msgsnd(id_mailbox_cliente, respuesta,
         sizeof(struct RespuestaServidor) - sizeof(long), 0) == -1) {
        perror("🚫 msgsnd");
     } else {
         printf("Enviando respuesta al cliente:\n");
         printf("- Mtype: %li\n", respuesta->mtype);
         printf("- Codigo: %i\n", respuesta->codigo);
-        printf("- Mensaje: %s\n", respuesta->mensaje);
+        printf("- Mensaje: %s\n\n", respuesta->mensaje);
    }   
 }
 
