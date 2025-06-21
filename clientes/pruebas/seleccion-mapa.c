@@ -15,7 +15,9 @@ Map maps[NUM_MAPS] = {
     {"Ciudad Perdida", 4, 6}
 };
 
-int selected_map = 0;
+//int current_selection = 0;
+
+static int current_selection = 0;
 
 void draw_map_selection() {
     clear();
@@ -25,7 +27,7 @@ void draw_map_selection() {
     attroff(COLOR_PAIR(3));
 
     for (int i = 0; i < NUM_MAPS; i++) {
-        if (i == selected_map) {
+        if (i == current_selection) {
             attron(A_REVERSE | COLOR_PAIR(1)); // Resaltar mapa seleccionado con color azul
         } else {
             attron(COLOR_PAIR(2)); // Color estándar para los mapas
@@ -38,7 +40,7 @@ void draw_map_selection() {
         attroff(COLOR_PAIR(2));
 
         // Línea divisoria
-        attron(COLOR_PAIR(3)); // Usamos amarillo para las líneas
+        attron(COLOR_PAIR(3));
         mvprintw(3 + (i * 2), 2, "------------------------------");
         attroff(COLOR_PAIR(3));
     }
@@ -50,29 +52,23 @@ void draw_map_selection() {
     refresh();
 }
 
-int main() {
-    initscr();
-    start_color();
+int mostrar_seleccion_mapa() {
 
     // Definir colores
     init_pair(1, COLOR_BLUE, COLOR_BLACK);  // Color azul para mapa seleccionado
     init_pair(2, COLOR_WHITE, COLOR_BLACK); // Color blanco para mapas no seleccionados
     init_pair(3, COLOR_YELLOW, COLOR_BLACK); // Color amarillo para el título e instrucciones
     
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-
     int ch;
     draw_map_selection();
 
     while ((ch = getch()) != '\n') {
         switch (ch) {
             case KEY_UP:
-                if (selected_map > 0) selected_map--;
+                if (current_selection > 0) current_selection--;
                 break;
             case KEY_DOWN:
-                if (selected_map < NUM_MAPS - 1) selected_map++;
+                if (current_selection < NUM_MAPS - 1) current_selection++;
                 break;
         }
         draw_map_selection();
@@ -80,7 +76,7 @@ int main() {
 
     clear();
     attron(COLOR_PAIR(1)); // Mensaje final con color azul
-    mvprintw(2, 5, "Mapa seleccionado: %s", maps[selected_map].name);
+    mvprintw(2, 5, "Mapa seleccionado: %s", maps[current_selection].name);
     attroff(COLOR_PAIR(1));
 
     attron(COLOR_PAIR(3)); // Instrucción de salida en amarillo
@@ -90,6 +86,5 @@ int main() {
     refresh();
     getch();
 
-    endwin();
-    return 0;
+    return current_selection;
 }
