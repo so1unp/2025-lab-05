@@ -146,7 +146,7 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
  * @param arg Puntero a los argumentos (no utilizado)
  * @return NULL
  **/
-void* hiloPing(void* arg);
+void *hiloPing(void *arg);
 
 /**
  * @brief Función principal del servidor de directorio
@@ -406,21 +406,48 @@ void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int
  **/
 void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
 {
+    time_t tiempo_actual = time(NULL);
+    struct tm *tiempo_local = localtime(&tiempo_actual);
+
+    printf("🔍 VERIFICACIÓN DE ESTADO - %02d:%02d:%02d\n",
+           tiempo_local->tm_hour, tiempo_local->tm_min, tiempo_local->tm_sec);
+
+    if (*num_catacumbas == 0)
+    {
+        printf("   ℹ️  No hay catacumbas registradas para verificar\n");
+        printf("────────────────────────────────────────────────────────────────\n");
+        return;
+    }
+
+    printf("   📊 Verificando %d catacumba%s registrada%s:\n",
+           *num_catacumbas,
+           (*num_catacumbas == 1) ? "" : "s",
+           (*num_catacumbas == 1) ? "" : "s");
+
+    int activas = 0, eliminadas = 0, errores = 0;
+
     for (int i = 0; i < *num_catacumbas; i++)
     {
+        printf("   ├─ [%d/%d] \"%s\" (PID: %d) → ",
+               i + 1, *num_catacumbas, catacumbas[i].nombre, catacumbas[i].pid);
+
         if (kill(catacumbas[i].pid, 0) == 0)
         {
-            printf("✅  Petición enviada a la catacumba: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
+            printf("🟢 ACTIVA\n");
+            activas++;
         }
         else
         {
             if (errno == EPERM)
             {
-                printf("⚠️  No se dispone de los permisos necesarios para enviar la solicitud a la catacumba: %d, %s \n", catacumbas[i].pid, catacumbas[i].nombre);
+                printf("🟡 SIN PERMISOS\n");
+                errores++;
             }
             else if (errno == ESRCH)
             {
+                printf("🔴 INACTIVA - Eliminando del directorio\n");
 
+                // Mover elementos hacia adelante para eliminar la catacumba inactiva
                 for (int j = i; j < *num_catacumbas - 1; j++)
                 {
                     strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
@@ -429,23 +456,37 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
                     strcpy(catacumbas[j].mailbox, catacumbas[j + 1].mailbox);
                     catacumbas[j].cantJug = catacumbas[j + 1].cantJug;
                     catacumbas[j].cantMaxJug = catacumbas[j + 1].cantMaxJug;
+                    catacumbas[j].pid = catacumbas[j + 1].pid;
                 }
 
                 (*num_catacumbas)--;
+                eliminadas++;
+                i--; // Revisar el mismo índice otra vez debido al reordenamiento
 
                 if (guardarCatacumbas(catacumbas, *num_catacumbas) != 0)
                 {
-                    printf("⚠️  Advertencia: No se pudo guardar la persistencia\n");
+                    printf("      ⚠️  Error al guardar cambios en persistencia\n");
                 }
-
-                printf("⚠️  Catacumba eliminada: %d, %s\n", catacumbas[i].pid, catacumbas[i].nombre);
             }
             else
             {
-                perror("❌ Error desconocido al verificar proceso");
+                printf("❌ ERROR DESCONOCIDO (errno: %d)\n", errno);
+                errores++;
             }
         }
     }
+
+    // Resumen del ping
+    printf("   └─ Resumen: ");
+    if (activas > 0)
+        printf("🟢 %d activa%s ", activas, (activas == 1) ? "" : "s");
+    if (eliminadas > 0)
+        printf("🔴 %d eliminada%s ", eliminadas, (eliminadas == 1) ? "" : "s");
+    if (errores > 0)
+        printf("⚠️ %d error%s ", errores, (errores == 1) ? "" : "es");
+    printf("(Total: %d)\n", *num_catacumbas);
+
+    printf("────────────────────────────────────────────────────────────────\n");
 }
 
 /**
@@ -918,28 +959,28 @@ void limpiarMailboxes(void)
  * @param arg Puntero a los argumentos (no utilizado)
  * @return NULL
  **/
-void* hiloPing(void* arg)
+void *hiloPing(void *arg)
 {
-    printf("🔄 Hilo de ping iniciado - ejecutando cada 1 segundo\n");
-    
+    printf("🔄 Hilo de ping iniciado - ejecutando cada %d segundo%s\n",
+           FRECUENCIA_PING, (FRECUENCIA_PING == 1) ? "" : "s");
+
     while (servidor_activo)
     {
-        sleep(1); // Esperar 1 segundo
-        
-        if (!servidor_activo) break; // Verificar si el servidor sigue activo
-        
+        sleep(FRECUENCIA_PING); // Usar la constante definida
+
+        if (!servidor_activo)
+            break; // Verificar si el servidor sigue activo
+
         // Acceso seguro a las catacumbas con mutex
         pthread_mutex_lock(&mutex_catacumbas);
-        
+
         if (catacumbas_global != NULL && num_catacumbas_global != NULL)
         {
-            printf("------------------------------- REALIZANDO PING -------------------------------\n");
             estadoServidor(catacumbas_global, num_catacumbas_global);
         }
-        
+
         pthread_mutex_unlock(&mutex_catacumbas);
     }
-    
-    printf("🔄 Hilo de ping terminando...\n");
+
     return NULL;
 }
