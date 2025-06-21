@@ -12,13 +12,18 @@
 #include <signal.h>
 #define _GNU_SOURCE
 
+// expresiones utiles para la generacion posiciones
+#define RANDOM_FILAS()(1 + rand() % (FILAS-2));
+#define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
 
-void atenderSolicitud(struct SolicitudServidor solicitud);
+void atenderSolicitud(struct SolicitudServidor *solicitud);
 void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
 
-int moverJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]);
+int conectarJugador(struct Jugador *jugador);
+int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]);
 int desconectarJugador(long pid);
 int buscarJugador(long pid);
+void consultarMostrar();
 
 // =========================
 //      VARIABLES GLOBALES
@@ -45,8 +50,7 @@ int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 // =========================
 //      UTILS
 // =========================
-void fatal(char msg[])
-{
+void fatal(char msg[]) {
     perror(msg);
     exit(EXIT_FAILURE);
 }
@@ -56,26 +60,18 @@ void fatal(char msg[])
 #define ANSI_RED "\x1b[31m"
 #define ANSI_YELLOW "\x1b[33m"
 #define ANSI_BLUE "\x1b[34m"
-void mostrarMapa()
-{
+void mostrarMapa() {
     printf("\n=== MAPA DE LA CATACUMBA ===\n");
     int i, j;
-    for (i = 0; i < FILAS; i++)
-    {
-        for (j = 0; j < COLUMNAS; j++)
-        {
+    for (i = 0; i < FILAS; i++) {
+        for (j = 0; j < COLUMNAS; j++) {
             const char *color = ANSI_RESET;
 
-            if (mapa[i][j] == PARED)
-            {
+            if (mapa[i][j] == PARED) {
                 color = ANSI_BLUE;
-            }
-            else if (mapa[i][j] == TESORO)
-            {
+            } else if (mapa[i][j] == TESORO) {
                 color = ANSI_YELLOW;
-            }
-            else
-            {
+            } else {
                 color = ANSI_RESET;
             }
             printf("%s%c%s", color, mapa[i][j], ANSI_RESET);
@@ -162,19 +158,13 @@ void enviarSolicitudDirectorio(struct solicitud *solicitud, struct respuesta *re
 //      GESTION MAPA
 // =========================
 
-void designArena(char mapa[FILAS][COLUMNAS])
-{
+void designArena(char mapa[FILAS][COLUMNAS]) {
     int i, j;
-    for (i = 0; i < FILAS; ++i)
-    {
-        for (j = 0; j < COLUMNAS; ++j)
-        {
-            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1)
-            {
+    for (i = 0; i < FILAS; ++i) {
+        for (j = 0; j < COLUMNAS; ++j) {
+            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1) {
                 mapa[i][j] = -1;
-            }
-            else
-            {
+            } else {
                 mapa[i][j] = (rand() % 10 < 2) ? -1 : 0;
             }
         }
@@ -310,19 +300,16 @@ void spawnearJugador(struct Jugador *jugador)
     struct Posicion valid_spawns[FILAS * COLUMNAS];
     int count = 0;
     int fila, columna;
-
+    int dist_fila, dist_columna, distancia;
     for (fila = 0; fila < FILAS; fila++)
     {
-        for (columna = 0; columna < COLUMNAS; columna++)
-        {
-            if (mapa[fila][columna] == VACIO)
-            {
-                int dist_fila = abs(fila - centro_fila);
-                int dist_columna = abs(columna - centro_columna);
-                int distancia = (dist_fila > dist_columna) ? dist_fila : dist_columna;
+        for (columna = 0; columna < COLUMNAS; columna++) {
+            if (mapa[fila][columna] == VACIO) {
+                dist_fila = abs(fila - centro_fila);
+                dist_columna = abs(columna - centro_columna);
+                distancia = (dist_fila > dist_columna) ? dist_fila : dist_columna;
 
-                if (distancia > min_radius)
-                {
+                if (distancia > min_radius) {
                     valid_spawns[count].fila = fila;
                     valid_spawns[count].columna = columna;
                     count++;
@@ -330,43 +317,41 @@ void spawnearJugador(struct Jugador *jugador)
             }
         }
     }
-
-    if (count > 0)
-    {
-        int choice = rand() % count;
+    int choice;
+    if (count > 0) {
+        choice = rand() % count;
         fila = valid_spawns[choice].fila;
         columna = valid_spawns[choice].columna;
-
-        jugador->posicion.fila = fila;
-        jugador->posicion.columna = columna;
-
-        mapa[fila][columna] = jugador->tipo;
-    }
-    else
-    {
+    } else {
         // Fallback: si no hay lugar en el anillo exterior, buscar en cualquier
         // lado.
-        do
-        {
-            fila = rand() % FILAS;
-            columna = rand() % COLUMNAS;
+        do {
+            // fila = rand() % FILAS;
+            // columna = rand() % COLUMNAS;
+            fila = RANDOM_FILAS();
+            columna = RANDOM_COLMS();
         } while (mapa[fila][columna] != VACIO);
-
-        jugador->posicion.fila = fila;
-        jugador->posicion.columna = columna;
-        mapa[fila][columna] = jugador->tipo;
     }
+    jugador->posicion = (struct Posicion){fila, columna};
+    mapa[fila][columna] = jugador->tipo;
     printf("[LOG] Jugador '%s' spawneado en (%d, %d).\n", jugador->nombre,
            jugador->posicion.fila, jugador->posicion.columna);
 }
 
-// Este no hay que hacerlo
-// ya está hecho en server-epullan.c pero lo adaptamos después
-void generarTesoro() {}
 
+void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
+    int fila, columna, i;
+    for (i = 0; i < MAX_TESOROS; i++) {
+        do {
+            fila = RANDOM_FILAS();
+            columna = RANDOM_COLMS();
+        } while (mapa[fila][columna] == VACIO);
+        mapa[fila][columna] = TESORO;
+        tesoros[i].id = i;
+        tesoros[i].posicion = (struct Posicion){fila, columna};
 
-
-
+    }
+}
 
 // =========================
 //      SETUP
@@ -649,7 +634,7 @@ int main(int argc, char *argv[])
             printf("- Columna: %i\n", solicitud.columna);
             printf("- Tipo: %c\n", solicitud.tipo);
         }
-        // atenderSolicitud(solicitud);
+        atenderSolicitud(&solicitud);
     }
 
     finish();
@@ -657,31 +642,27 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
-void atenderSolicitud(struct SolicitudServidor solicitud) {
+void atenderSolicitud(struct SolicitudServidor *solicitud) {
     struct Jugador jugador; // el jugador que realizo la solicitud
-    struct Posicion posicion;
-    posicion = (struct Posicion) {solicitud.fila , solicitud.columna};
-    jugador.pid =solicitud.mtype;
-    jugador.posicion = posicion;
+    jugador.pid = solicitud->mtype;
+    jugador.posicion = (struct Posicion) {solicitud->fila , solicitud->columna};
     // TODO: jugador.nombre 
-    jugador.tipo = solicitud.tipo;
+    jugador.tipo = solicitud->tipo;
     
     struct RespuestaServidor respuesta;
-    respuesta.mtype = solicitud.mtype;
+    respuesta.mtype = solicitud->mtype;
 
-    switch (solicitud.codigo) {
+    switch (solicitud->codigo) {
     case CONEXION:
         printf("Jugador (%ld) solicita conectarse...\n", jugador.pid);
-
-        if (aceptarJugador(&jugador)){
-            // TODO: colocar jugador en el mapa.
+        if (conectarJugador(&jugador) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
-            "Jugador conectado con éxito");
-            respuesta.codigo = 1;
-        } else {
-        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
-            "Intento fallido, no se conecto jugador");
+                "Intento fallido, no se conecto jugador");
             respuesta.codigo = 0;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "Jugador conectado con exito");
+            respuesta.codigo = 1;
         }
         break;
     case DESCONEXION:
@@ -698,7 +679,7 @@ void atenderSolicitud(struct SolicitudServidor solicitud) {
         break;
     case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
         printf("Jugador (%ld) se mueve...\n", jugador.pid);
-        if (moverJugador(jugador, mapa) < 0) { 
+        if (moverJugador(&jugador, mapa) < 0) { 
             // no deberia llegar aca pero por las dudas lo pongo
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
@@ -709,13 +690,13 @@ void atenderSolicitud(struct SolicitudServidor solicitud) {
         respuesta.codigo = 1;
         break;
     case NOTIFICACION:
-        // TODO:
+        // TODO: ?? 
         break;
     default:
         break;
     }
 
-    responderSolicitud(solicitud.clave_mailbox_respuestas, &respuesta);
+    responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
 }
 
 void responderSolicitud(int clave_mailbox_respuestas,
@@ -731,14 +712,27 @@ void responderSolicitud(int clave_mailbox_respuestas,
    }   
 }
 
+int conectarJugador(struct Jugador *jugador) {
+    // verificar
+    if (!aceptarJugador(jugador)) return -1;
+
+    // darle una posicion
+    spawnearJugador(jugador);
+    
+    // incrementar cantidad total y del tipo del jugador
+    jugadores[estado->cant_jugadores++] = *jugador;
+    (jugador->tipo == RAIDER) ? estado->cant_raiders++ : estado->cant_guardianes++;
+    return 0;
+}
+
 // comparar y actualizar posicion de jugador en Jugadores y Mapa
-int moverJugador(struct Jugador jugador, char mapa[FILAS][COLUMNAS]) {
-    int pos = buscarJugador(jugador.pid);
-    if (pos < 0) return -1; // ocurrio algo
+int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]) {
+    int pos = buscarJugador(jugador->pid);
+    if (pos < 0) return -1;
 
     mapa[jugadores[pos].posicion.fila][jugadores[pos].posicion.columna] = VACIO;
-    jugadores[pos].posicion = jugador.posicion;
-    mapa[jugador.posicion.fila][jugador.posicion.columna] = jugador.tipo; 
+    jugadores[pos].posicion = jugador->posicion;
+    mapa[jugador->posicion.fila][jugador->posicion.columna] = jugador->tipo; 
     return 0;
 }
 
@@ -749,9 +743,8 @@ int desconectarJugador(long pid) {
     mapa[jugadores[pos].posicion.fila]
         [jugadores[pos].posicion.columna] = VACIO;
 
-    if (jugadores[pos].tipo == RAIDER)
-        estado->cant_raiders--;
-    else if (jugadores[pos].tipo == GUARDIAN)
+    (jugadores[pos].tipo == RAIDER) ?
+        estado->cant_raiders--:
         estado->cant_guardianes--;
     
     int j;
@@ -764,10 +757,17 @@ int desconectarJugador(long pid) {
 
 int buscarJugador(long pid) {
     int i;
-    for (i = 0; i < estado->cant_jugadores; i++) {
-        if (jugadores[i].pid == pid) {
-            return i;
-        }
-    }
+    for (i = 0; i < estado->cant_jugadores; i++)
+        if (jugadores[i].pid == pid) return i;
     return -1;
+}
+
+// metodo util: pregunta si quiere ver el mapa, la hace posterior a responder al cliente
+void consultarMostrar(){
+    char respuesta;
+
+    printf("¿Querés ver el mapa? (y/n): ");
+    scanf(" %c", &respuesta);
+
+    if (respuesta == 'y' || respuesta == 'Y') mostrarMapa();
 }
