@@ -629,7 +629,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
             respuesta.codigo = 1;
         }
         break;
-    case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+    case MOVIMIENTO: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
         printf("\n═══════════════════════════════════════════════════════════════\n");
         printf("Jugador (%ld) se mueve...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
@@ -643,7 +643,10 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
             "Jugador se movio con exito");
         respuesta.codigo = 1;
         break;
-    case NOTIFICACION:
+    case TESORO_CAPTURADO:
+        // TODO: ?? 
+        break;
+    case RAIDER_CAPTURADO:
         // TODO: ?? 
         break;
     default:
