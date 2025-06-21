@@ -608,11 +608,11 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         if (conectarJugador(&jugador) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Intento fallido, no se conecto jugador");
-            respuesta.codigo = 0;
+            respuesta.codigo = ERROR;
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador conectado con exito");
-            respuesta.codigo = 1;
+            respuesta.codigo = OK;
         }
         break;
     case DESCONEXION:
@@ -622,11 +622,11 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         if (desconectarJugador(jugador.pid) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
-            respuesta.codigo = 0;
+            respuesta.codigo = ERROR;
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador desconectado con exito");
-            respuesta.codigo = 1;
+            respuesta.codigo = OK;
         }
         break;
     case MOVIMIENTO: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
@@ -637,17 +637,23 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
             // no deberia llegar aca pero por las dudas lo pongo
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
-            respuesta.codigo = 0;
+            respuesta.codigo = ERROR;
         }
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
             "Jugador se movio con exito");
-        respuesta.codigo = 1;
+        respuesta.codigo = OK;
         break;
     case TESORO_CAPTURADO:
         // TODO: ?? 
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "tesoro capturado");
+        respuesta.codigo = OK;
         break;
     case RAIDER_CAPTURADO:
         // TODO: ?? 
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "raider capturado");
+        respuesta.codigo = OK;
         break;
     default:
         break;

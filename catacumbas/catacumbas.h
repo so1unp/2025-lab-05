@@ -29,6 +29,7 @@
 
 // CODIGOS DE ACCIONES
 // Los que envia servidor:
+#define ERROR -1
 #define OK 1
 #define SIN_TESOROS 2
 #define SIN_RAIDERS 3
