@@ -13,6 +13,7 @@
 #include <signal.h>
 #define _GNU_SOURCE
 
+
 // expresiones utiles para la generacion posiciones
 #define RANDOM_FILAS()(1 + rand() % (FILAS-2));
 #define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
@@ -26,8 +27,14 @@ int desconectarJugador(long pid);
 int capturarTesoro(struct Jugador *jugador);
 int capturarRaider(struct Jugador *jugador);
 int buscarJugador(long pid);
+void generarTesoros();
+
+
+// UTILS
 void consultarMostrar();
-void debugEstado();
+void imprimirTesoros();
+void imprimirEstado();
+
 
 // =========================
 //      VARIABLES GLOBALES
@@ -323,17 +330,18 @@ void spawnearJugador(struct Jugador *jugador)
 }
 
 
-void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
-    int fila, columna, i;
-    for (i = 0; i < MAX_TESOROS; i++) {
-        do {
-            fila = RANDOM_FILAS();
-            columna = RANDOM_COLMS();
-        } while (mapa[fila][columna] == VACIO);
-        mapa[fila][columna] = TESORO;
-        tesoros[i].id = i;
-        tesoros[i].posicion = (struct Posicion){fila, columna};
-
+void generarTesoros() {
+    int fila, columna, i = 0;
+    while (estado->cant_tesoros < max_tesoros && i < MAX_TESOROS) {
+        fila = RANDOM_FILAS();
+        columna = RANDOM_COLMS();
+        if (mapa[fila][columna] == VACIO) {
+            mapa[fila][columna] = TESORO;
+            tesoros[i].id = i;
+            tesoros[i].posicion = (struct Posicion){fila, columna};
+            estado->cant_tesoros++;
+            i++;
+        }
     }
 }
 
@@ -520,7 +528,7 @@ void setup(char rutaMapa[], char rutaConfig[])
     estado->cant_raiders = 0;
     estado->cant_jugadores = 0;
     estado->cant_tesoros = 0;
-
+    generarTesoros();
     // Avisar al proceso directorio
     // Iniciar comunicación con directorio
     struct solicitud solicitud_directorio;
@@ -689,7 +697,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
     }
 
     responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
-    debugEstado();
+    imprimirEstado();
 }
 
 void responderSolicitud(int clave_mailbox_respuestas,
@@ -712,6 +720,7 @@ void responderSolicitud(int clave_mailbox_respuestas,
 }
 
 int conectarJugador(struct Jugador *jugador) {
+    // if (buscarJugador(jugador->pid) != -1) return -1; // ya existe
     if (!aceptarJugador(jugador)) return -1; // verificar
     spawnearJugador(jugador); // darle una posicion
     jugadores[estado->cant_jugadores++] = *jugador; // incrementar cantidad
@@ -780,8 +789,6 @@ int capturarRaider(struct Jugador *jugador) {
     int i, j;
     for (i = 0; i < estado->cant_jugadores; i++) {
         if (i == pos) continue; // no se captura
-        // busca a quien tenga misma posicion y se sea raider
-        // y lo sobreesribe
         if (jugadores[i].tipo == RAIDER &&
             jugadores[i].posicion.fila == fila &&
             jugadores[i].posicion.columna == columna) {
@@ -816,7 +823,7 @@ void consultarMostrar(){
     if (respuesta == 'y' || respuesta == 'Y') mostrarMapa();
 }
 
-void debugEstado() {
+void imprimirEstado() {
     printf("\n===== ESTADO DEL SERVIDOR =====\n");
     printf("- Máx. jugadores permitidos : %d\n", estado->max_jugadores);
     printf("- Cantidad total de jugadores: %d\n", estado->cant_jugadores);
@@ -824,4 +831,15 @@ void debugEstado() {
     printf("- Cantidad de Guardianes     : %d\n", estado->cant_guardianes);
     printf("- Cantidad de Tesoros        : %d\n", estado->cant_tesoros);
     printf("================================\n\n");
+}
+
+void imprimirTesoros() {
+    printf("\n===== Tesoros Posiciones =====\n");
+    int i;
+    for (i = 0; i < estado->cant_tesoros; i++) {
+        printf("tesoro %d con pos [%d, %d]\n",
+            tesoros[i].id,
+            tesoros[i].posicion.fila,
+            tesoros[i].posicion.columna);
+    }
 }

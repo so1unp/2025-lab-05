@@ -1,3 +1,6 @@
+// este cliente lo hizo chatGPT: funcionar como raider padre y guardian hijo
+// yo solo le agregue lo necesario del anterior cliente para que funcionen
+// las solicitudes
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -7,6 +10,13 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+
+// el rand sin srand siempre tira a las mismas posiciones
+// entonces se usa los resultados
+struct Posicion posiciones[10] = {
+    {12, 23}, {7, 44}, {7, 2}, {15, 43}, {12, 8},
+    {18, 56}, {10, 41}, {16, 37}, {9, 77}, {17, 9}
+};
 
 #define clear() printf("\033[H\033[J")
 
@@ -74,6 +84,20 @@ void jugarComoRaider(long mi_pid, int clave_server, int clave_mailbox_respuestas
     solicitud.tipo = RAIDER;
 
     solicitudRespuesta(mi_pid, &solicitud, clave_server); // Función que envía y recibe
+    
+    solicitud.codigo = TESORO_CAPTURADO;
+    solicitud.fila = 1;
+    solicitud.columna = 1;
+    // error no hay tesoro hay
+    solicitudRespuesta(mi_pid, &solicitud, clave_server);
+    int i;
+    for (i = 0; i < 10; i++) {
+        solicitud.fila = posiciones[i].fila;
+        solicitud.columna = posiciones[i].columna;
+        solicitudRespuesta(mi_pid, &solicitud, clave_server); // captura tesoro
+    } // una vez captura todos los tesoros no hay mas tesoros
+    solicitudRespuesta(mi_pid, &solicitud, clave_server);
+
 
     // mover a (1,1)
     solicitud.codigo = MOVIMIENTO;
@@ -102,13 +126,13 @@ void jugarComoGuardian(long mi_pid, int clave_server, int clave_mailbox_respuest
     solicitud.codigo = RAIDER_CAPTURADO;
     solicitud.fila = 1;
     solicitud.columna = 1;
-
+    // captura correctamente
     solicitudRespuesta(mi_pid, &solicitud, clave_server);
-
+    // falla en la captura
+    solicitudRespuesta(mi_pid, &solicitud, clave_server);
     // desconectar guardian
     solicitud.codigo = DESCONEXION;
     solicitudRespuesta(mi_pid, &solicitud, clave_server);
-    printf("raider llega esta aca\n");
 }
 
 // La función solicitudRespuesta debe ser algo que maneje enviar/recibir
