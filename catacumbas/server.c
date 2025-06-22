@@ -770,6 +770,8 @@ int capturarTesoro(struct Jugador *jugador) {
     if (mapa[fila][columna] == TESORO) {
         mapa[fila][columna] = RAIDER;
         estado->cant_tesoros--;
+        mapa[jugadores[pos].posicion.fila]
+            [jugadores[pos].posicion.columna] = VACIO;
         jugadores[pos].posicion = jugador->posicion;
         return 0;
     }
@@ -794,12 +796,14 @@ int capturarRaider(struct Jugador *jugador) {
             jugadores[i].posicion.columna == columna) {
             mapa[fila][columna] = GUARDIAN;
             
+            mapa[jugadores[pos].posicion.fila]
+                [jugadores[pos].posicion.columna] = VACIO;
+            jugadores[pos].posicion = jugador->posicion;
             for (j = i; j < estado->cant_jugadores - 1; j++) {
                 jugadores[j] = jugadores[j + 1];
             }
             estado->cant_jugadores--;
             estado->cant_raiders--;
-            jugadores[pos].posicion = jugador->posicion;
             return 0;
         }
     }
@@ -833,6 +837,7 @@ void imprimirEstado() {
     printf("================================\n\n");
 }
 
+// solo sirve para verificar
 void imprimirTesoros() {
     printf("\n===== Tesoros Posiciones =====\n");
     int i;
