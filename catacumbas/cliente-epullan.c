@@ -29,14 +29,11 @@ void fatal(char msg[]);
 void imprimirSolicitud(struct SolicitudServidor *solicitud);
 void imprimirRespuesta(struct RespuestaServidor *respuesta);
 void finalizar();
-void acciones();
-void mostrar_menu();
 
 char (*mapa)[COLUMNAS];
 struct SolicitudServidor solicitud;
 struct RespuestaServidor respuesta;
 int mailbox_respuesta_id, mailbox_solicitudes_id;
-char (*mapa)[COLUMNAS];
 
 
 int main(int argc, char *argv[]) {
@@ -149,44 +146,6 @@ void finalizar(){
     }
     printf("Programa terminado\n\n");
     exit(EXIT_SUCCESS);
-}
-
-void acciones() {
-    solicitud.fila = 3;
-    solicitud.columna = 3;
-    while (1) {
-        // mostrar_menu();
-
-        int opcion;
-        printf("Seleccioná una opción: ");
-        scanf("%d", &opcion);
-        // scanf();
-        switch (opcion) {
-        case DESCONEXION:
-            printf("jugador se desconecta...");
-            finalizar();
-            break;
-        case TESORO_CAPTURADO:
-            printf("jugador se mueve...");
-            break;
-        case RAIDER_CAPTURADO:
-            printf("jugador se mueve...");
-            break;
-        default:
-            break;
-        }
-
-    }
-}
-
-
-void mostrar_menu() {
-    printf("\n═════════ MENÚ ═════════\n");
-    printf("1. Mover jugador\n");
-    printf("2. Capturar tesoro\n");
-    printf("3. Capturar raider\n");
-    printf("4. Desconectarse\n");
-    printf("════════════════════════\n");
 }
 
 void consultarMostrar(){

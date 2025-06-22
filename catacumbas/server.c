@@ -23,10 +23,11 @@ void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *
 int conectarJugador(struct Jugador *jugador);
 int moverJugador(struct Jugador *jugador);
 int desconectarJugador(long pid);
-int capturarTesoro(long pid); 
-int capturarRaider(long pid);
+int capturarTesoro(struct Jugador *jugador);
+int capturarRaider(struct Jugador *jugador);
 int buscarJugador(long pid);
 void consultarMostrar();
+void debugEstado();
 
 // =========================
 //      VARIABLES GLOBALES
@@ -602,6 +603,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
     struct RespuestaServidor respuesta;
     respuesta.mtype = solicitud->mtype;
 
+    int codigo; // codigo interno
 
     // TODO: modificar los metodos de atencion para pasar &respuesta
     // como argumento y construir la respuesta directamente,
@@ -653,7 +655,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         printf("\tJugador (%ld) intenta capturar tesoro...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
 
-        int codigo = capturarTesoro(jugador.pid);
+        codigo = capturarTesoro(&jugador);
         if (codigo == 0) {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
             respuesta.codigo = OK;
@@ -670,7 +672,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         printf("\tGuardían (%ld) intenta capturar raider...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
 
-        int codigo = capturarRaider(jugador.pid);
+        codigo = capturarRaider(&jugador);
         if (codigo == 0) {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Raider capturado con exito");
             respuesta.codigo = OK;
@@ -687,6 +689,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
     }
 
     responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
+    debugEstado();
 }
 
 void responderSolicitud(int clave_mailbox_respuestas,
@@ -745,46 +748,51 @@ int desconectarJugador(long pid) {
     return 0;
 }
 
-int capturarTesoro(long pid){
+int capturarTesoro(struct Jugador *jugador) {
     if (estado->cant_tesoros == 0) return SIN_TESOROS;
 
-    int pos = buscarJugador(pid);
+    int pos = buscarJugador(jugador->pid);
     if (pos < 0) return -1;
     if (jugadores[pos].tipo == GUARDIAN) return -1;
-
-    int fila = jugadores[pos].posicion.fila;
-    int columna = jugadores[pos].posicion.columna;
     
+    int fila = jugador->posicion.fila;
+    int columna = jugador->posicion.columna;
+
     if (mapa[fila][columna] == TESORO) {
-        mapa[fila][columna] = VACIO;
+        mapa[fila][columna] = RAIDER;
         estado->cant_tesoros--;
+        jugadores[pos].posicion = jugador->posicion;
         return 0;
     }
     return -1;
 }
 
-int capturarRaider(long pid){
+int capturarRaider(struct Jugador *jugador) {
     if (estado->cant_raiders == 0) return SIN_RAIDERS;
     
-    int pos = buscarJugador(pid);
+    int pos = buscarJugador(jugador->pid);
     if (pos < 0) return -1;
-    if (jugadores[pos].tipo == RAIDER) return -1;
+    if (jugador->tipo == RAIDER) return -1;
 
-    int fila = jugadores[pos].posicion.fila;
-    int columna = jugadores[pos].posicion.columna;
+    int fila = jugador->posicion.fila;      
+    int columna = jugador->posicion.columna;
+
     int i, j;
     for (i = 0; i < estado->cant_jugadores; i++) {
         if (i == pos) continue; // no se captura
+        // busca a quien tenga misma posicion y se sea raider
+        // y lo sobreesribe
         if (jugadores[i].tipo == RAIDER &&
             jugadores[i].posicion.fila == fila &&
             jugadores[i].posicion.columna == columna) {
-
-            mapa[fila][columna] = VACIO;
+            mapa[fila][columna] = GUARDIAN;
+            
             for (j = i; j < estado->cant_jugadores - 1; j++) {
                 jugadores[j] = jugadores[j + 1];
             }
             estado->cant_jugadores--;
             estado->cant_raiders--;
+            jugadores[pos].posicion = jugador->posicion;
             return 0;
         }
     }
@@ -806,4 +814,14 @@ void consultarMostrar(){
     scanf(" %c", &respuesta);
 
     if (respuesta == 'y' || respuesta == 'Y') mostrarMapa();
+}
+
+void debugEstado() {
+    printf("\n===== ESTADO DEL SERVIDOR =====\n");
+    printf("- Máx. jugadores permitidos : %d\n", estado->max_jugadores);
+    printf("- Cantidad total de jugadores: %d\n", estado->cant_jugadores);
+    printf("- Cantidad de Raiders        : %d\n", estado->cant_raiders);
+    printf("- Cantidad de Guardianes     : %d\n", estado->cant_guardianes);
+    printf("- Cantidad de Tesoros        : %d\n", estado->cant_tesoros);
+    printf("================================\n\n");
 }
