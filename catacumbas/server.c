@@ -669,10 +669,18 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         printf("\n═══════════════════════════════════════════════════════════════\n");
         printf("\tGuardían (%ld) intenta capturar raider...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
-        // TODO: ?? 
-        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
-            "raider capturado");
-        respuesta.codigo = OK;
+
+        int codigo = capturarRaider(jugador.pid);
+        if (codigo == 0) {
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Raider capturado con exito");
+            respuesta.codigo = OK;
+        } else if (codigo == SIN_RAIDERS) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan raiders en el mapa");
+            respuesta.codigo = SIN_RAIDERS;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "No hay raider en esta posicion");
+            respuesta.codigo = ERROR;
+        }
         break;
     default:
         break;
@@ -742,18 +750,46 @@ int capturarTesoro(long pid){
 
     int pos = buscarJugador(pid);
     if (pos < 0) return -1;
-    
+    if (jugadores[pos].tipo == GUARDIAN) return -1;
+
     int fila = jugadores[pos].posicion.fila;
-    int col = jugadores[pos].posicion.columna;
+    int columna = jugadores[pos].posicion.columna;
     
-    if (mapa[fila][col] == TESORO) {
-        mapa[fila][col] = VACIO;
+    if (mapa[fila][columna] == TESORO) {
+        mapa[fila][columna] = VACIO;
         estado->cant_tesoros--;
-        return 0; // éxito
+        return 0;
     }
     return -1;
 }
 
+int capturarRaider(long pid){
+    if (estado->cant_raiders == 0) return SIN_RAIDERS;
+    
+    int pos = buscarJugador(pid);
+    if (pos < 0) return -1;
+    if (jugadores[pos].tipo == RAIDER) return -1;
+
+    int fila = jugadores[pos].posicion.fila;
+    int columna = jugadores[pos].posicion.columna;
+    int i, j;
+    for (i = 0; i < estado->cant_jugadores; i++) {
+        if (i == pos) continue; // no se captura
+        if (jugadores[i].tipo == RAIDER &&
+            jugadores[i].posicion.fila == fila &&
+            jugadores[i].posicion.columna == columna) {
+
+            mapa[fila][columna] = VACIO;
+            for (j = i; j < estado->cant_jugadores - 1; j++) {
+                jugadores[j] = jugadores[j + 1];
+            }
+            estado->cant_jugadores--;
+            estado->cant_raiders--;
+            return 0;
+        }
+    }
+    return -1;
+}
 
 int buscarJugador(long pid) {
     int i;
