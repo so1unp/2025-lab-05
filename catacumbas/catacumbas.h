@@ -1,6 +1,7 @@
 #ifndef CATACUMBAS_H
 #define CATACUMBAS_H
 
+
 // VALORES MAPA
 #define PARED '#'
 #define VACIO ' '
@@ -8,16 +9,14 @@
 #define RAIDER 'R'
 #define GUARDIAN 'G'
 
+// TAMAÑOS MÁXIMOS (restricciones de configuraciones)
+#define MAX_TESOROS 50
+#define MAX_JUGADORES 50
+
 // LONG. DE STRINGS
 #define MAX_LONGITUD_NOMBRE_RUTAS 50
 #define MAX_LONGITUD_NOMBRE_JUGADOR 10
 #define MAX_LONGITUD_MENSAJES 50
-
-//  REGLAS DEL JUEGO
-#define MAX_RAIDERS 8
-#define MAX_GUARDIANES 8
-#define MAX_JUGADORES MAX_GUARDIANES + MAX_RAIDERS
-#define MAX_TESOROS 10
 
 // DIMENSION DEL MAPA
 #define FILAS 25

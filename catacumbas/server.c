@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -12,8 +13,18 @@
 #include <signal.h>
 #define _GNU_SOURCE
 
+// expresiones utiles para la generacion posiciones
+#define RANDOM_FILAS()(1 + rand() % (FILAS-2));
+#define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
 
+void atenderSolicitud(struct SolicitudServidor *solicitud);
+void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
 
+int conectarJugador(struct Jugador *jugador);
+int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]);
+int desconectarJugador(long pid);
+int buscarJugador(long pid);
+void consultarMostrar();
 
 // =========================
 //      VARIABLES GLOBALES
@@ -22,9 +33,9 @@ struct Tesoro tesoros[MAX_TESOROS];
 struct Jugador jugadores[MAX_JUGADORES];
 struct Estado *estado;
 char (*mapa)[COLUMNAS];
-int max_guardianes;
-int max_raiders;
-int max_tesoros;
+int max_guardianes = 0;
+int max_raiders = 0;
+int max_tesoros = 0;
 int size_mapa = sizeof(char) * FILAS * COLUMNAS;
 int size_estado = sizeof(struct Estado);
 char memoria_mapa_nombre[128];
@@ -33,15 +44,12 @@ int mailbox_solicitudes_clave;
 int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
 int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 
-
-
-
+pthread_t hilo_solicitud;
 
 // =========================
 //      UTILS
 // =========================
-void fatal(char msg[])
-{
+void fatal(char msg[]) {
     perror(msg);
     exit(EXIT_FAILURE);
 }
@@ -51,26 +59,18 @@ void fatal(char msg[])
 #define ANSI_RED "\x1b[31m"
 #define ANSI_YELLOW "\x1b[33m"
 #define ANSI_BLUE "\x1b[34m"
-void mostrarMapa()
-{
+void mostrarMapa() {
     printf("\n=== MAPA DE LA CATACUMBA ===\n");
     int i, j;
-    for (i = 0; i < FILAS; i++)
-    {
-        for (j = 0; j < COLUMNAS; j++)
-        {
+    for (i = 0; i < FILAS; i++) {
+        for (j = 0; j < COLUMNAS; j++) {
             const char *color = ANSI_RESET;
 
-            if (mapa[i][j] == PARED)
-            {
+            if (mapa[i][j] == PARED) {
                 color = ANSI_BLUE;
-            }
-            else if (mapa[i][j] == TESORO)
-            {
+            } else if (mapa[i][j] == TESORO) {
                 color = ANSI_YELLOW;
-            }
-            else
-            {
+            } else {
                 color = ANSI_RESET;
             }
             printf("%s%c%s", color, mapa[i][j], ANSI_RESET);
@@ -80,19 +80,9 @@ void mostrarMapa()
     printf("===========================\n");
 }
 
-
-
-
-
-
-
-
-
 // =========================
 //      MENSAJERIA
 // =========================
-
-
 /**
  * @brief enviar un mensaje a un cliente
  *  
@@ -102,59 +92,60 @@ void enviarRespuestaCliente(struct Jugador *jugador, int codigo, char *mensaje[]
 }
 
 /**
- * @brief Revisar los mailboxes en busca de solicitudes posibles
+ * @brief Revisar el mailbox en busca de solicitudes posibles
  *  
  */
 void recibirSolicitudesClientes(int mailBox){
     // fijate que no sea bloqueante el msgrcv
-    while (1)
-    {
-        
+    while (1) {   
+    }    
+}
+
+/**
+ * @brief Leer el mailbox de respuestas del directorio
+ * para buscar una respuesta para este servidor
+ *  
+ */
+void recibirRespuestaDirectorio(struct respuesta *respuesta){
+    printf("Recibiendo respuesta de directorio...\n");
+    // MUY IMPORTANTE usar getpid() para solo recibir los mensajes de este servidor
+    if (msgrcv(mailbox_directorio_respuestas_id, respuesta, sizeof(struct respuesta) - sizeof(long), getpid(), 0) == -1) {
+        perror("🚫 Error al recibir respuesta de Directorio");
+    } else {
+        printf("Respuesta de directorio recibida:\n");
+        printf("- Mtype: %li\n", respuesta->mtype);
+        printf("- Código: %i\n", respuesta->codigo);
+        printf("- Datos: %s\n", respuesta->datos);
+        printf("- Elementos: %i\n", respuesta->num_elementos);
     }
-    
 }
 
-void enviarSolicitudDirectorio() {
+/**
+ * @brief Enviar una solicitud al mailbox de Directorio
+ *  
+ */
+void enviarSolicitudDirectorio(struct solicitud *solicitud, struct respuesta *respuesta) {
 
-    struct solicitud solicitud_directorio;
+    printf("Enviando solicitud a directorio:\n");
+    printf("- Mtype: %li\n", solicitud->mtype);
+    printf("- Tipo: %i\n", solicitud->tipo);
+    printf("- Texto: %s\n", solicitud->texto);
+    msgsnd(mailbox_directorio_solicitudes_id, solicitud, sizeof(struct solicitud) - sizeof(long), 0);
 
-    solicitud_directorio.mtype = getpid();
-    solicitud_directorio.tipo = OP_AGREGAR;
-    snprintf(
-        solicitud_directorio.texto,                 
-        sizeof(solicitud_directorio.texto),        
-        "%s|%s|%d",
-        "nombre_generico_1",
-        memoria_mapa_nombre,
-        mailbox_solicitudes_clave
-    );
-
-    printf("%s\n", solicitud_directorio.texto);
-
-    msgsnd(mailbox_directorio_solicitudes_id, &solicitud_directorio, sizeof(struct solicitud), 0);
+    recibirRespuestaDirectorio(respuesta);
 }
-
-
-
-
 
 // =========================
 //      GESTION MAPA
 // =========================
 
-void designArena(char mapa[FILAS][COLUMNAS])
-{
+void designArena(char mapa[FILAS][COLUMNAS]) {
     int i, j;
-    for (i = 0; i < FILAS; ++i)
-    {
-        for (j = 0; j < COLUMNAS; ++j)
-        {
-            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1)
-            {
+    for (i = 0; i < FILAS; ++i) {
+        for (j = 0; j < COLUMNAS; ++j) {
+            if (i == 0 || i == FILAS - 1 || j == 0 || j == COLUMNAS - 1) {
                 mapa[i][j] = -1;
-            }
-            else
-            {
+            } else {
                 mapa[i][j] = (rand() % 10 < 2) ? -1 : 0;
             }
         }
@@ -238,19 +229,19 @@ int aceptarJugador(struct Jugador *jugador)
     switch (jugador->tipo)
     {
     case RAIDER:
-        if (estado->cant_raiders >= MAX_RAIDERS)
+        if (estado->cant_raiders >= max_raiders)
         {
             printf("[LOG] Rechazado: equipo RAIDER lleno (%d/%d).\n",
-                   estado->cant_raiders, MAX_RAIDERS);
+                   estado->cant_raiders, max_raiders);
             return EXIT_SUCCESS;
         }
         break;
 
     case GUARDIAN:
-        if (estado->cant_guardianes >= MAX_GUARDIANES)
+        if (estado->cant_guardianes >= max_guardianes)
         {
             printf("[LOG] Rechazado: equipo GUARDIAN lleno (%d/%d).\n",
-                   estado->cant_guardianes, MAX_GUARDIANES);
+                   estado->cant_guardianes, max_guardianes);
             return EXIT_SUCCESS;
         }
         break;
@@ -290,19 +281,16 @@ void spawnearJugador(struct Jugador *jugador)
     struct Posicion valid_spawns[FILAS * COLUMNAS];
     int count = 0;
     int fila, columna;
-
+    int dist_fila, dist_columna, distancia;
     for (fila = 0; fila < FILAS; fila++)
     {
-        for (columna = 0; columna < COLUMNAS; columna++)
-        {
-            if (mapa[fila][columna] == VACIO)
-            {
-                int dist_fila = abs(fila - centro_fila);
-                int dist_columna = abs(columna - centro_columna);
-                int distancia = (dist_fila > dist_columna) ? dist_fila : dist_columna;
+        for (columna = 0; columna < COLUMNAS; columna++) {
+            if (mapa[fila][columna] == VACIO) {
+                dist_fila = abs(fila - centro_fila);
+                dist_columna = abs(columna - centro_columna);
+                distancia = (dist_fila > dist_columna) ? dist_fila : dist_columna;
 
-                if (distancia > min_radius)
-                {
+                if (distancia > min_radius) {
                     valid_spawns[count].fila = fila;
                     valid_spawns[count].columna = columna;
                     count++;
@@ -310,76 +298,74 @@ void spawnearJugador(struct Jugador *jugador)
             }
         }
     }
-
-    if (count > 0)
-    {
-        int choice = rand() % count;
+    int choice;
+    if (count > 0) {
+        choice = rand() % count;
         fila = valid_spawns[choice].fila;
         columna = valid_spawns[choice].columna;
-
-        jugador->posicion.fila = fila;
-        jugador->posicion.columna = columna;
-
-        mapa[fila][columna] = jugador->tipo;
-    }
-    else
-    {
+    } else {
         // Fallback: si no hay lugar en el anillo exterior, buscar en cualquier
         // lado.
-        do
-        {
-            fila = rand() % FILAS;
-            columna = rand() % COLUMNAS;
+        do {
+            // fila = rand() % FILAS;
+            // columna = rand() % COLUMNAS;
+            fila = RANDOM_FILAS();
+            columna = RANDOM_COLMS();
         } while (mapa[fila][columna] != VACIO);
-
-        jugador->posicion.fila = fila;
-        jugador->posicion.columna = columna;
-        mapa[fila][columna] = jugador->tipo;
     }
+    jugador->posicion = (struct Posicion){fila, columna};
+    mapa[fila][columna] = jugador->tipo;
     printf("[LOG] Jugador '%s' spawneado en (%d, %d).\n", jugador->nombre,
            jugador->posicion.fila, jugador->posicion.columna);
 }
 
-// Este no hay que hacerlo
-// ya está hecho en server-epullan.c pero lo adaptamos después
-void generarTesoro() {}
 
+void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
+    int fila, columna, i;
+    for (i = 0; i < MAX_TESOROS; i++) {
+        do {
+            fila = RANDOM_FILAS();
+            columna = RANDOM_COLMS();
+        } while (mapa[fila][columna] == VACIO);
+        mapa[fila][columna] = TESORO;
+        tesoros[i].id = i;
+        tesoros[i].posicion = (struct Posicion){fila, columna};
 
-
-
+    }
+}
 
 // =========================
 //      SETUP
 // =========================
 void abrirMensajeria()
 {
-    // TODO
-    // Unificar mailbox para usar un solo struct
-    // Abrir mailbox solicitudes
+    // Nuestros mailboxes
     mailbox_solicitudes_id = msgget(mailbox_solicitudes_clave, 0777 | IPC_CREAT);
     if (mailbox_solicitudes_id == -1)
     {
-        perror("Error al crear el mailbox de solicitudes");
+        perror("🚫 Error al crear el mailbox de solicitudes");
         exit(EXIT_FAILURE);
     }
-    mailbox_directorio_solicitudes_id = msgget(MAILBOX_KEY, 0777);
+    // Mailboxes de los demás}
+    mailbox_directorio_solicitudes_id = msgget(MAILBOX_KEY, 0);
     if (mailbox_directorio_solicitudes_id == -1)
     {
-        perror("Error al abrir mailbox de solicitudes de directorio");
+        perror("🚫 Error al abrir mailbox de solicitudes de directorio");
     }
-
-    mailbox_directorio_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0777);
+    mailbox_directorio_respuestas_id = msgget(MAILBOX_RESPUESTA_KEY, 0);
     if (mailbox_directorio_respuestas_id == -1)
     {
-        perror("Error al abrir mailbox de respuestas de directorio");
+        perror("🚫 Error al abrir mailbox de respuestas de directorio");
     }
+    
 }
+
 void abrirMemoria()
 {
 
     memoria_mapa_fd =
         shm_open(memoria_mapa_nombre,
-                 O_CREAT | O_RDWR | O_EXCL, 0777);
+                 O_CREAT | O_RDWR | O_EXCL, 0666);
     if (memoria_mapa_fd == -1)
         fatal("Error creando shm mapa");
     if (ftruncate(memoria_mapa_fd, size_mapa) == -1)
@@ -392,7 +378,7 @@ void abrirMemoria()
 
     memoria_estado_fd =
         shm_open(memoria_estado_nombre,
-                 O_CREAT | O_RDWR | O_EXCL, 0777);
+                 O_CREAT | O_RDWR | O_EXCL, 0666);
     if (memoria_estado_fd == -1)
         fatal("Error creando shm estado");
     if (ftruncate(memoria_estado_fd, size_estado) == -1)
@@ -409,7 +395,7 @@ void cargarArchivoConfiguracion(char ruta[])
     FILE *archivo = fopen(ruta, "r");
     if (!archivo)
     {
-        perror("No se pudo abrir el archivo");
+        perror("🚫 No se pudo abrir el archivo de configuraciones");
         exit(EXIT_FAILURE);
     }
 
@@ -447,7 +433,7 @@ void cargarArchivoMapa(char ruta[])
     FILE *archivo = fopen(ruta, "r");
     if (!archivo)
     {
-        perror("No se pudo abrir el archivo");
+        perror("🚫 No se pudo abrir el archivo del mapa");
         exit(EXIT_FAILURE);
     }
 
@@ -484,8 +470,8 @@ void finish()
     close(memoria_estado_fd);
     if (msgctl(mailbox_solicitudes_id, IPC_RMID, NULL) == -1)
     {
-        perror("Error al eliminar el buzón de solicitudes");
-        exit(1);
+        perror("🚫 Error al eliminar el buzón de solicitudes, por favor eliminelo manualmente con ipcs -q y luego ipcrm -q <id>");
+        exit(EXIT_FAILURE);
     }
     printf("Programa terminado\n");
     exit(EXIT_SUCCESS);
@@ -494,27 +480,18 @@ void finish()
 void setup(char rutaMapa[], char rutaConfig[])
 {
     // El orden es importante aqui
-    
-    // Comunicación
-    // Armar nombres y claves
-    snprintf(memoria_mapa_nombre, sizeof(memoria_mapa_nombre), "%s%d", MEMORIA_MAPA_PREFIJO, getpid());
-    snprintf(memoria_estado_nombre, sizeof(memoria_mapa_nombre), "%s%d", MEMORIA_ESTADO_PREFIJO, getpid());
-    mailbox_solicitudes_clave = getpid() * MAILBOX_SOLICITUDES_SUFIJO;
-    
-    abrirMemoria();
-    abrirMensajeria();
-    
-    // Inicializaciones
-    cargarArchivoConfiguracion(rutaConfig);
-    cargarArchivoMapa(rutaMapa);
-        
-    // Generar el estado
-    memset(estado, 0, sizeof(struct Estado));
-    estado->max_jugadores = MAX_JUGADORES;
-    
+
     // Preparar la señal para detener el proceso y eliminar las cosas
     // que haya creado
     signal(SIGINT, finish);
+
+    // Inicializaciones
+    snprintf(memoria_mapa_nombre, sizeof(memoria_mapa_nombre), "%s%d", MEMORIA_MAPA_PREFIJO, getpid());
+    snprintf(memoria_estado_nombre, sizeof(memoria_mapa_nombre), "%s%d", MEMORIA_ESTADO_PREFIJO, getpid());
+    mailbox_solicitudes_clave = getpid() * MAILBOX_SOLICITUDES_SUFIJO;    
+    abrirMemoria();
+    cargarArchivoConfiguracion(rutaConfig);
+    cargarArchivoMapa(rutaMapa);
 
     printf("═══════════════════════════════════════════════════════════════\n");
     printf("           SERVIDOR DE CATACUMBA INICIADO 🗿🚬                 \n");
@@ -527,8 +504,38 @@ void setup(char rutaMapa[], char rutaConfig[])
     printf("  - Cantidad máxima de guardianes: %i\n", max_guardianes);
     printf("  - Cantidad máxima de raiders: %i\n", max_raiders);
     printf("  - Cantidad máxima de tesoros: %i\n", max_tesoros);
-}
+    printf("\n");
+    printf("═══════════════════════════════════════════════════════════════\n\n");
 
+    // Comunicación    
+    abrirMensajeria();
+    
+    // Generar el estado
+    memset(estado, 0, sizeof(struct Estado));
+    estado->max_jugadores = max_guardianes + max_raiders;
+    estado->cant_guardianes = 0;
+    estado->cant_raiders = 0;
+    estado->cant_jugadores = 0;
+    estado->cant_tesoros = 0;
+
+    // Avisar al proceso directorio
+    // Iniciar comunicación con directorio
+    struct solicitud solicitud_directorio;
+    solicitud_directorio.mtype = getpid();
+    solicitud_directorio.tipo = OP_AGREGAR;
+    snprintf(
+        solicitud_directorio.texto,                 
+        sizeof(solicitud_directorio.texto),        
+        "%s|%s|%s|%d",
+        "servidor_generico",
+        memoria_mapa_nombre,
+        memoria_estado_nombre,
+        mailbox_solicitudes_clave
+    );
+    struct respuesta respuesta_directorio;
+    enviarSolicitudDirectorio(&solicitud_directorio, &respuesta_directorio);
+
+}
 
 // =========================
 //      MAIN
@@ -536,51 +543,46 @@ void setup(char rutaMapa[], char rutaConfig[])
 
 int main(int argc, char *argv[])
 {
+    if (argc < 3){
+        printf("Argumentos inválidos, por favor utilicelo de la siguiente forma:\n");
+        printf("\n");
+        printf("./server  ruta/a/mapa.txt  ruta/a/config.properties\n");
+        printf("\n");
+        printf("    mapa.txt:\n");
+        printf("        El archivo del que se cargará el mapa.\n");
+        printf("        Debe ser de 80x25 sin espacios ni líneas extra\n");        
+        printf("\n");
+        printf("    config.properties:\n");
+        printf("        El archivo de configuraciones de mapa.\n");
+        printf("        Debe especificar:\n");
+        printf("        - max_tesoros=<maximo de tesoros>\n");
+        printf("        - max_raiders=<maximo de raiders>\n");
+        printf("        - max_guardianes=<maximo de guardianes>\n");
+
+        exit(EXIT_FAILURE);
+    }
     setup(argv[1], argv[2]);
 
-    // ----
-    // Prueba de spawneo
-    mostrarMapa();
-    printf("\n[TEST] Agregando un jugador de prueba (Raider).\n");
-    struct Jugador jugador_prueba;
-    jugador_prueba.pid = getpid();
-    jugador_prueba.tipo = RAIDER;
-    strcpy(jugador_prueba.nombre, "R-Test");
-
-    if (aceptarJugador(&jugador_prueba) == EXIT_FAILURE)
-    { // EXIT_FAILURE (0) significa que se puede aceptar
-        jugadores[estado->cant_jugadores] = jugador_prueba;
-        if (jugador_prueba.tipo == RAIDER)
-        {
-            estado->cant_raiders++;
-        }
-        else if (jugador_prueba.tipo == GUARDIAN)
-        {
-            estado->cant_guardianes++;
-        }
-        estado->cant_jugadores++;
-        spawnearJugador(&jugadores[estado->cant_jugadores - 1]);
-        printf("[TEST] Jugador de prueba agregado y spawneado.\n");
-    }
-    else
-    {
-        printf("[TEST] No se pudo agregar el jugador de prueba.\n");
-    }
-    mostrarMapa();
-
     // ---
-    // RECIBIR SOLICITUDES
+    // RECIBIR SOLICITUDES DE CLIENTES
     while (1) {
         printf("Esperando solicitudes...\n");
-        struct SolicitudServidor solicitud;
         // Solicitudes del cliente
         // Dejar que se bloquee 
         // Se desbloquea al detectar un mensaje
-        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 1, 0) == -1) {
-            perror("msgrcv");
+        struct SolicitudServidor solicitud;
+        if (msgrcv(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0, 0) == -1) {
+            perror("🚫 msgrcv");
         } else {
-            printf("Mensaje recibido: %d\n", solicitud.codigo);
+            printf("Mensaje recibido:\n");
+            printf("- Mtype: %li\n", solicitud.mtype);
+            printf("- Codigo: %i\n", solicitud.codigo);
+            printf("- Mailbox: %i\n", solicitud.clave_mailbox_respuestas);
+            printf("- Fila: %i\n", solicitud.fila);
+            printf("- Columna: %i\n", solicitud.columna);
+            printf("- Tipo: %c\n\n", solicitud.tipo);
         }
+        atenderSolicitud(&solicitud);
     }
 
     finish();
@@ -588,9 +590,144 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
+void atenderSolicitud(struct SolicitudServidor *solicitud) {
+    struct Jugador jugador; // el jugador que realizo la solicitud
+    jugador.pid = solicitud->mtype;
+    jugador.posicion = (struct Posicion) {solicitud->fila , solicitud->columna};
+    // TODO: jugador.nombre 
+    jugador.tipo = solicitud->tipo;
+    
+    struct RespuestaServidor respuesta;
+    respuesta.mtype = solicitud->mtype;
 
+    switch (solicitud->codigo) {
+    case CONEXION:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\t\tJugador (%ld) solicita conectarse...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+        if (conectarJugador(&jugador) <0) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "Intento fallido, no se conecto jugador");
+            respuesta.codigo = 0;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "Jugador conectado con exito");
+            respuesta.codigo = 1;
+        }
+        break;
+    case DESCONEXION:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("Jugador (%ld) solicita desconectarse...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+        if (desconectarJugador(jugador.pid) <0) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "no encontro al jugador");
+            respuesta.codigo = 0;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "Jugador desconectado con exito");
+            respuesta.codigo = 1;
+        }
+        break;
+    case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("Jugador (%ld) se mueve...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+        if (moverJugador(&jugador, mapa) < 0) { 
+            // no deberia llegar aca pero por las dudas lo pongo
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+                "no encontro al jugador");
+            respuesta.codigo = 0;
+        }
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
+            "Jugador se movio con exito");
+        respuesta.codigo = 1;
+        break;
+    case NOTIFICACION:
+        // TODO: ?? 
+        break;
+    default:
+        break;
+    }
 
+    responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
+}
 
+void responderSolicitud(int clave_mailbox_respuestas,
+     struct RespuestaServidor *respuesta) {
+    int id_mailbox_cliente = msgget(clave_mailbox_respuestas, 0);
+    if (id_mailbox_cliente == -1) {
+        perror("🚫 No se pudo obtener el ID del mailbox del cliente");
+        return;
+    }
 
+    if (msgsnd(id_mailbox_cliente, respuesta,
+        sizeof(struct RespuestaServidor) - sizeof(long), 0) == -1) {
+       perror("🚫 msgsnd");
+    } else {
+        printf("Enviando respuesta al cliente:\n");
+        printf("- Mtype: %li\n", respuesta->mtype);
+        printf("- Codigo: %i\n", respuesta->codigo);
+        printf("- Mensaje: %s\n\n", respuesta->mensaje);
+   }   
+}
 
+int conectarJugador(struct Jugador *jugador) {
+    // verificar
+    if (!aceptarJugador(jugador)) return -1;
 
+    // darle una posicion
+    spawnearJugador(jugador);
+    
+    // incrementar cantidad total y del tipo del jugador
+    jugadores[estado->cant_jugadores++] = *jugador;
+    (jugador->tipo == RAIDER) ? estado->cant_raiders++ : estado->cant_guardianes++;
+    return 0;
+}
+
+// comparar y actualizar posicion de jugador en Jugadores y Mapa
+int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]) {
+    int pos = buscarJugador(jugador->pid);
+    if (pos < 0) return -1;
+
+    mapa[jugadores[pos].posicion.fila][jugadores[pos].posicion.columna] = VACIO;
+    jugadores[pos].posicion = jugador->posicion;
+    mapa[jugador->posicion.fila][jugador->posicion.columna] = jugador->tipo; 
+    return 0;
+}
+
+int desconectarJugador(long pid) {
+    int pos = buscarJugador(pid);
+    if (pos < 0) return -1;
+
+    mapa[jugadores[pos].posicion.fila]
+        [jugadores[pos].posicion.columna] = VACIO;
+
+    (jugadores[pos].tipo == RAIDER) ?
+        estado->cant_raiders--:
+        estado->cant_guardianes--;
+    
+    int j;
+    for (j = pos; j < estado->cant_jugadores - 1; j++) {
+        jugadores[j] = jugadores[j + 1];
+    }
+    estado->cant_jugadores--;
+    return 0;
+}
+
+int buscarJugador(long pid) {
+    int i;
+    for (i = 0; i < estado->cant_jugadores; i++)
+        if (jugadores[i].pid == pid) return i;
+    return -1;
+}
+
+// metodo util: pregunta si quiere ver el mapa, la hace posterior a responder al cliente
+void consultarMostrar(){
+    char respuesta;
+
+    printf("¿Querés ver el mapa? (y/n): ");
+    scanf(" %c", &respuesta);
+
+    if (respuesta == 'y' || respuesta == 'Y') mostrarMapa();
+}
