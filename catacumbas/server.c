@@ -21,8 +21,10 @@ void atenderSolicitud(struct SolicitudServidor *solicitud);
 void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
 
 int conectarJugador(struct Jugador *jugador);
-int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]);
+int moverJugador(struct Jugador *jugador);
 int desconectarJugador(long pid);
+int capturarTesoro(long pid); 
+int capturarRaider(long pid);
 int buscarJugador(long pid);
 void consultarMostrar();
 
@@ -44,7 +46,7 @@ int mailbox_solicitudes_clave;
 int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
 int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 
-pthread_t hilo_solicitud;
+pthread_t hilo_directorio; // util en un futuro
 
 // =========================
 //      UTILS
@@ -600,10 +602,14 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
     struct RespuestaServidor respuesta;
     respuesta.mtype = solicitud->mtype;
 
+
+    // TODO: modificar los metodos de atencion para pasar &respuesta
+    // como argumento y construir la respuesta directamente,
+    // evitando if dentro de los case
     switch (solicitud->codigo) {
     case CONEXION:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("\t\tJugador (%ld) solicita conectarse...\n", jugador.pid);
+        printf("\tJugador (%ld) solicita conectarse...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
         if (conectarJugador(&jugador) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
@@ -617,7 +623,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         break;
     case DESCONEXION:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("Jugador (%ld) solicita desconectarse...\n", jugador.pid);
+        printf("\tJugador (%ld) solicita desconectarse...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
         if (desconectarJugador(jugador.pid) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
@@ -629,27 +635,40 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
             respuesta.codigo = OK;
         }
         break;
-    case MOVIMIENTO: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+    case MOVIMIENTO:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("Jugador (%ld) se mueve...\n", jugador.pid);
+        printf("\tJugador (%ld) se mueve...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
-        if (moverJugador(&jugador, mapa) < 0) { 
-            // no deberia llegar aca pero por las dudas lo pongo
+        if (moverJugador(&jugador) < 0) { 
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
             respuesta.codigo = ERROR;
-        }
+        } else {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
             "Jugador se movio con exito");
-        respuesta.codigo = OK;
+        respuesta.codigo = OK;}
         break;
     case TESORO_CAPTURADO:
-        // TODO: ?? 
-        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
-            "tesoro capturado");
-        respuesta.codigo = OK;
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\tJugador (%ld) intenta capturar tesoro...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+
+        int codigo = capturarTesoro(jugador.pid);
+        if (codigo == 0) {
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
+            respuesta.codigo = OK;
+        } else if (codigo == SIN_TESOROS) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan tesoros en el mapa");
+            respuesta.codigo = SIN_TESOROS;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "No hay tesoro en esta posicion");
+            respuesta.codigo = ERROR;
+        }
         break;
     case RAIDER_CAPTURADO:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\tGuardían (%ld) intenta capturar raider...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
         // TODO: ?? 
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
             "raider capturado");
@@ -682,20 +701,14 @@ void responderSolicitud(int clave_mailbox_respuestas,
 }
 
 int conectarJugador(struct Jugador *jugador) {
-    // verificar
-    if (!aceptarJugador(jugador)) return -1;
-
-    // darle una posicion
-    spawnearJugador(jugador);
-    
-    // incrementar cantidad total y del tipo del jugador
-    jugadores[estado->cant_jugadores++] = *jugador;
+    if (!aceptarJugador(jugador)) return -1; // verificar
+    spawnearJugador(jugador); // darle una posicion
+    jugadores[estado->cant_jugadores++] = *jugador; // incrementar cantidad
     (jugador->tipo == RAIDER) ? estado->cant_raiders++ : estado->cant_guardianes++;
     return 0;
 }
 
-// comparar y actualizar posicion de jugador en Jugadores y Mapa
-int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]) {
+int moverJugador(struct Jugador *jugador) {
     int pos = buscarJugador(jugador->pid);
     if (pos < 0) return -1;
 
@@ -723,6 +736,24 @@ int desconectarJugador(long pid) {
     estado->cant_jugadores--;
     return 0;
 }
+
+int capturarTesoro(long pid){
+    if (estado->cant_tesoros == 0) return SIN_TESOROS;
+
+    int pos = buscarJugador(pid);
+    if (pos < 0) return -1;
+    
+    int fila = jugadores[pos].posicion.fila;
+    int col = jugadores[pos].posicion.columna;
+    
+    if (mapa[fila][col] == TESORO) {
+        mapa[fila][col] = VACIO;
+        estado->cant_tesoros--;
+        return 0; // éxito
+    }
+    return -1;
+}
+
 
 int buscarJugador(long pid) {
     int i;
