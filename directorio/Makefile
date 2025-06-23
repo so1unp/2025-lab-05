@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-std=c99 -Wall -Wextra
-LDFLAGS=-pthread
+LDFLAGS=-pthread -lrt
 
 # Directorios
 SRC_DIR=src
