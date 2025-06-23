@@ -11,7 +11,10 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include "directorio.h"
+#include "../catacumbas/catacumbas.h"
 
 // ==================== VARIABLES GLOBALES PARA LIMPIEZA ====================
 
@@ -147,6 +150,17 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
  * @return NULL
  **/
 void *hiloPing(void *arg);
+
+/**
+ * @brief Lee el estado de una catacumba desde su memoria compartida
+ *
+ * Accede al archivo de memoria compartida de propiedades de la catacumba
+ * para obtener información actualizada sobre jugadores y límites.
+ *
+ * @param catacumba Puntero a la estructura catacumba a actualizar
+ * @return 0 si se lee correctamente, -1 si hay error
+ **/
+int leerEstadoCatacumba(struct catacumba *catacumba);
 
 /**
  * @brief Función principal del servidor de directorio
@@ -424,7 +438,7 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
            (*num_catacumbas == 1) ? "" : "s",
            (*num_catacumbas == 1) ? "" : "s");
 
-    int activas = 0, eliminadas = 0, errores = 0;
+    int activas = 0, eliminadas = 0;
 
     for (int i = 0; i < *num_catacumbas; i++)
     {
@@ -433,45 +447,44 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
 
         if (kill(catacumbas[i].pid, 0) == 0)
         {
-            printf("🟢 ACTIVA\n");
+            printf("🟢 ACTIVA");
+
+            // Leer estado actualizado de la catacumba
+            if (leerEstadoCatacumba(&catacumbas[i]) == 0)
+            {
+                printf(" | %d/%d jugadores", catacumbas[i].cantJug, catacumbas[i].cantMaxJug);
+            }
+            else
+            {
+                printf(" | Estado no disponible");
+            }
+            printf("\n");
+
             activas++;
         }
         else
         {
-            if (errno == EPERM)
+            printf(" INACTIVA - Eliminando del directorio\n");
+
+            // Mover elementos hacia adelante para eliminar la catacumba inactiva
+            for (int j = i; j < *num_catacumbas - 1; j++)
             {
-                printf("🟡 SIN PERMISOS\n");
-                errores++;
+                strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
+                strcpy(catacumbas[j].direccion, catacumbas[j + 1].direccion);
+                strcpy(catacumbas[j].propCatacumba, catacumbas[j + 1].propCatacumba);
+                strcpy(catacumbas[j].mailbox, catacumbas[j + 1].mailbox);
+                catacumbas[j].cantJug = catacumbas[j + 1].cantJug;
+                catacumbas[j].cantMaxJug = catacumbas[j + 1].cantMaxJug;
+                catacumbas[j].pid = catacumbas[j + 1].pid;
             }
-            else if (errno == ESRCH)
+
+            (*num_catacumbas)--;
+            eliminadas++;
+            i--; // Revisar el mismo índice otra vez debido al reordenamiento
+
+            if (guardarCatacumbas(catacumbas, *num_catacumbas) != 0)
             {
-                printf("🔴 INACTIVA - Eliminando del directorio\n");
-
-                // Mover elementos hacia adelante para eliminar la catacumba inactiva
-                for (int j = i; j < *num_catacumbas - 1; j++)
-                {
-                    strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
-                    strcpy(catacumbas[j].direccion, catacumbas[j + 1].direccion);
-                    strcpy(catacumbas[j].propCatacumba, catacumbas[j + 1].propCatacumba);
-                    strcpy(catacumbas[j].mailbox, catacumbas[j + 1].mailbox);
-                    catacumbas[j].cantJug = catacumbas[j + 1].cantJug;
-                    catacumbas[j].cantMaxJug = catacumbas[j + 1].cantMaxJug;
-                    catacumbas[j].pid = catacumbas[j + 1].pid;
-                }
-
-                (*num_catacumbas)--;
-                eliminadas++;
-                i--; // Revisar el mismo índice otra vez debido al reordenamiento
-
-                if (guardarCatacumbas(catacumbas, *num_catacumbas) != 0)
-                {
-                    printf("      ⚠️  Error al guardar cambios en persistencia\n");
-                }
-            }
-            else
-            {
-                printf("❌ ERROR DESCONOCIDO (errno: %d)\n", errno);
-                errores++;
+                printf("      ⚠️  Error al guardar cambios en persistencia\n");
             }
         }
     }
@@ -482,9 +495,16 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
         printf("🟢 %d activa%s ", activas, (activas == 1) ? "" : "s");
     if (eliminadas > 0)
         printf("🔴 %d eliminada%s ", eliminadas, (eliminadas == 1) ? "" : "s");
-    if (errores > 0)
-        printf("⚠️ %d error%s ", errores, (errores == 1) ? "" : "es");
     printf("(Total: %d)\n", *num_catacumbas);
+
+    // Guardar estado actualizado si hay catacumbas activas (para persistir cambios de jugadores)
+    if (activas > 0)
+    {
+        if (guardarCatacumbas(catacumbas, *num_catacumbas) != 0)
+        {
+            printf("      ⚠️  Error al actualizar persistencia con nuevos estados\n");
+        }
+    }
 
     printf("────────────────────────────────────────────────────────────────\n");
 }
@@ -983,4 +1003,59 @@ void *hiloPing(void *arg)
     }
 
     return NULL;
+}
+
+// ==================== IMPLEMENTACIÓN DE FUNCIÓN PARA LECTURA DE ESTADO ====================
+
+/**
+ * @brief Lee el estado de una catacumba desde su memoria compartida
+ *
+ * Accede al archivo de memoria compartida de propiedades de la catacumba
+ * para obtener información actualizada sobre jugadores y límites.
+ *
+ * @param catacumba Puntero a la estructura catacumba a actualizar
+ * @return 0 si se lee correctamente, -1 si hay error
+ **/
+int leerEstadoCatacumba(struct catacumba *catacumba)
+{
+    int fd = -1;
+    struct Estado *estado_ptr = NULL;
+
+    // Abrir el archivo de memoria compartida de propiedades
+    fd = shm_open(catacumba->propCatacumba, O_RDONLY, 0666);
+    if (fd == -1)
+    {
+        printf("      ⚠️  Error al abrir SHM de propiedades '%s': %s\n",
+               catacumba->propCatacumba, strerror(errno));
+        catacumba->cantJug = 0;
+        catacumba->cantMaxJug = 0;
+        return -1;
+    }
+
+    // Mapear la memoria compartida
+    estado_ptr = (struct Estado *)mmap(NULL, sizeof(struct Estado),
+                                       PROT_READ, MAP_SHARED, fd, 0);
+    if (estado_ptr == MAP_FAILED)
+    {
+        printf("      ⚠️  Error al mapear SHM de propiedades '%s': %s\n",
+               catacumba->propCatacumba, strerror(errno));
+        close(fd);
+        catacumba->cantJug = 0;
+        catacumba->cantMaxJug = 0;
+        return -1;
+    }
+
+    // Leer los valores del estado
+    catacumba->cantJug = estado_ptr->cant_jugadores;
+    catacumba->cantMaxJug = estado_ptr->max_jugadores;
+
+    // Limpiar recursos
+    if (munmap(estado_ptr, sizeof(struct Estado)) == -1)
+    {
+        printf("      ⚠️  Error al desmapear SHM de propiedades '%s': %s\n",
+               catacumba->propCatacumba, strerror(errno));
+    }
+
+    close(fd);
+    return 0;
 }
