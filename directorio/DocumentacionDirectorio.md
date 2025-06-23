@@ -123,12 +123,50 @@ void establecer_catacumbas_globales(struct catacumba *catacumbas, int *num_catac
 
 ### 📊 Módulo de Ping (`ping.c/h`)
 ```c
+int procesoActivo(int pid);
 void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
 void *hiloPing(void *arg);
 int leerEstadoCatacumba(struct catacumba *catacumba);
 ```
 - **Propósito**: Monitoreo periódico del estado de catacumbas
 - **Funciones**: Verificación de procesos activos y actualización de estadísticas
+
+#### 🔍 Sistema de Detección de Procesos
+El módulo de ping implementa un sistema robusto para detectar si los procesos de catacumbas están activos, independientemente del usuario que los haya iniciado:
+
+**Función `procesoActivo(int pid)`:**
+```c
+int procesoActivo(int pid)
+{
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    // Verificar si existe el directorio /proc/PID
+    if (access(proc_path, F_OK) == 0)
+    {
+        return 1; // El proceso existe
+    }
+    else
+    {
+        return 0; // El proceso no existe
+    }
+}
+```
+
+**Ventajas del nuevo enfoque:**
+- **✅ Detección universal**: Puede detectar procesos de cualquier usuario
+- **✅ Mayor robustez**: Utiliza el sistema de archivos `/proc` que refleja el estado real del kernel
+- **✅ Sin permisos especiales**: No requiere privilegios adicionales
+- **✅ Estándar POSIX**: Compatible con todos los sistemas Unix/Linux
+
+**Comparación con el método anterior:**
+- **Método anterior**: `kill(pid, 0)` - Solo funciona para procesos del mismo usuario
+- **Método actual**: `access("/proc/PID", F_OK)` - Funciona para procesos de cualquier usuario
+
+**Frecuencia de monitoreo:**
+- El hilo de ping ejecuta verificaciones cada `FRECUENCIA_PING` segundos (5 segundos por defecto, definido en `directorio.h`)
+- Utiliza mutex para acceso seguro a los datos compartidos entre hilos
+- Elimina automáticamente catacumbas cuyos procesos ya no están activos
 
 ---
 
@@ -303,6 +341,112 @@ msgrcv(mailbox_respuestas, &resp, ..., mi_pid, 0);  // Filtrar por PID
 
 ---
 
+## 🔍 Sistema de Ping: Implementación Técnica
+
+### Descripción General
+El sistema de ping es un componente crítico que ejecuta en un hilo separado para monitorear continuamente el estado de todas las catacumbas registradas. Su propósito principal es detectar automáticamente cuando los procesos de catacumbas se terminan y eliminarlos del directorio.
+
+### Arquitectura del Sistema
+
+#### 1. **Hilo de Ping (`hiloPing`)**
+```c
+void *hiloPing(void *arg)
+{
+    struct ping_params *params = (struct ping_params *)arg;
+    
+    while (servidor_activo)
+    {
+        sleep(FRECUENCIA_PING);
+        
+        pthread_mutex_lock(&mutex_catacumbas);
+        estadoServidor(params->catacumbas, params->num_catacumbas);
+        pthread_mutex_unlock(&mutex_catacumbas);
+    }
+    
+    return NULL;
+}
+```
+
+**Características:**
+- **Ejecución periódica**: Cada `FRECUENCIA_PING` segundos (5 segundos por defecto)
+- **Thread-safe**: Utiliza mutex para proteger acceso a datos compartidos
+- **No bloqueante**: Permite al servidor continuar operando normalmente
+
+#### 2. **Detección de Procesos (`procesoActivo`)**
+
+**Implementación actual:**
+```c
+int procesoActivo(int pid)
+{
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    if (access(proc_path, F_OK) == 0)
+        return 1; // El proceso existe
+    else
+        return 0; // El proceso no existe
+}
+```
+
+**¿Por qué este enfoque?**
+
+| Aspecto          | `kill(pid, 0)` (anterior)               | `access("/proc/PID", F_OK)` (actual)       |
+| ---------------- | --------------------------------------- | ------------------------------------------ |
+| **Alcance**      | Solo procesos del mismo usuario         | Todos los procesos del sistema             |
+| **Permisos**     | Requiere permisos sobre el proceso      | Solo lectura del sistema de archivos       |
+| **Portabilidad** | POSIX estándar                          | Linux/Unix específico pero universal       |
+| **Robustez**     | Falla con permisos insuficientes        | Siempre funciona si `/proc` está montado   |
+| **Casos de uso** | Servidor y catacumbas del mismo usuario | Catacumbas iniciadas por cualquier usuario |
+
+#### 3. **Verificación de Estado (`estadoServidor`)**
+
+**Algoritmo de verificación:**
+1. **Iteración**: Recorre todas las catacumbas registradas
+2. **Verificación**: Llama a `procesoActivo(pid)` para cada catacumba
+3. **Actualización**: Si está activa, lee su estado desde memoria compartida
+4. **Eliminación**: Si no está activa, la elimina del array y actualiza persistencia
+5. **Reporte**: Muestra resumen con estadísticas de catacumbas activas/eliminadas
+
+**Manejo de eliminaciones:**
+```c
+// Eliminación segura con reordenamiento
+for (int j = i; j < *num_catacumbas - 1; j++)
+{
+    strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
+    strcpy(catacumbas[j].direccion, catacumbas[j + 1].direccion);
+    // ... copiar resto de campos
+}
+(*num_catacumbas)--;
+i--; // Revisar el mismo índice debido al reordenamiento
+```
+
+#### 4. **Lectura de Estado (`leerEstadoCatacumba`)**
+
+**Acceso a memoria compartida:**
+```c
+int leerEstadoCatacumba(struct catacumba *catacumba)
+{
+    int fd = shm_open(catacumba->propCatacumba, O_RDONLY, 0666);
+    if (fd == -1) return -1;
+    
+    struct Estado *estado_ptr = mmap(NULL, sizeof(struct Estado),
+                                   PROT_READ, MAP_SHARED, fd, 0);
+    if (estado_ptr == MAP_FAILED) {
+        close(fd);
+        return -1;
+    }
+    
+    // Actualizar información de jugadores
+    catacumba->cantJug = estado_ptr->cant_jugadores;
+    catacumba->cantMaxJug = estado_ptr->max_jugadores;
+    
+    munmap(estado_ptr, sizeof(struct Estado));
+    close(fd);
+    return 0;
+}
+```
+---
+
 ## Códigos de Ejemplo
 
 ### Cliente Básico
@@ -412,3 +556,5 @@ void parsearListaCatacumbas(char *datos) {
     }
 }
 ```
+
+
