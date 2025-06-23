@@ -22,6 +22,31 @@ volatile bool servidor_activo = true;
 pthread_mutex_t mutex_catacumbas = PTHREAD_MUTEX_INITIALIZER;
 
 /**
+ * @brief Verifica si un proceso está activo independientemente del usuario
+ *
+ * Esta función verifica la existencia de un proceso consultando el sistema de
+ * archivos /proc, lo que permite verificar procesos de cualquier usuario.
+ *
+ * @param pid PID del proceso a verificar
+ * @return 1 si el proceso está activo, 0 si no existe
+ **/
+int procesoActivo(int pid)
+{
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    // Verificar si existe el directorio /proc/PID
+    if (access(proc_path, F_OK) == 0)
+    {
+        return 1; // El proceso existe
+    }
+    else
+    {
+        return 0; // El proceso no existe
+    }
+}
+
+/**
  * @brief Obtiene el estado de todas las catacumbas de la lista
  *
  *
@@ -55,7 +80,7 @@ void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas)
         printf("   ├─ [%d/%d] \"%s\" (PID: %d) → ",
                i + 1, *num_catacumbas, catacumbas[i].nombre, catacumbas[i].pid);
 
-        if (kill(catacumbas[i].pid, 0) == 0)
+        if (procesoActivo(catacumbas[i].pid))
         {
             printf("🟢 ACTIVA");
 

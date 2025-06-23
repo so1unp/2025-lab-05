@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c99 -Wall -Wextra
+CFLAGS=-std=c99 -Wall -Wextra -D_XOPEN_SOURCE=700
 LDFLAGS=-pthread -lrt
 
 # Directorios

@@ -6,7 +6,8 @@
 #include "../directorio.h"
 
 // Estructura para pasar parámetros al hilo de ping
-struct ping_params {
+struct ping_params
+{
     struct catacumba *catacumbas;
     int *num_catacumbas;
 };
@@ -17,6 +18,7 @@ extern volatile bool servidor_activo;
 extern pthread_mutex_t mutex_catacumbas;
 
 // Prototipos de funciones de ping
+int procesoActivo(int pid);
 void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
 void *hiloPing(void *arg);
 int leerEstadoCatacumba(struct catacumba *catacumba);
