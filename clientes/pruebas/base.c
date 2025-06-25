@@ -42,6 +42,7 @@ void draw_static_header() {
 
 void draw_map()
 {
+
     // SIEMPRE dibujar el header fijo primero
     draw_static_header();
     
@@ -85,7 +86,7 @@ int is_walkable(int y, int x)
     return cell == ' ' || cell == '$';
 }
 
-int mostrar_base() {
+int mostrar_base(char playerChar) {
     initscr();
     //Habilito colores
     start_color(); 
@@ -143,7 +144,7 @@ int mostrar_base() {
         
         // Dibujar jugador en nueva posición (ajustada por el desplazamiento)
         attron(COLOR_PAIR(2));
-        mvaddch(py + 4, px + 2, 'E');
+        mvaddch(py + 4, px + 2, playerChar);
         attroff(COLOR_PAIR(2));
 
         if (map[py][px] == '$')
