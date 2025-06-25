@@ -11,14 +11,112 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ncurses.h>
+#include "../catacumbas/catacumbas.h"
 
 char caracter_atrapable;
 char caracter_jugador;
 char (*map)[WIDTH + 1];
-extern char selected_role[50]; // Valor por defecto
-extern char  selected_map[50]; // Valor por defecto
+extern char selected_role[50];
+extern char selected_map[50];
 
+// Variables para comunicación con el servidor
+int mailbox_servidor_id = -1;
+int mailbox_cliente_id = -1;
+char *mapa_compartido = NULL;
 
+// Función para conectar con el servidor de catacumbas
+int conectar_servidor(char *nombre_catacumba) {
+    
+    // Crear mailbox único para este cliente
+    key_t key_cliente = ftok("/tmp",getpid());
+    mailbox_cliente_id = msgget(key_cliente, IPC_CREAT | 0666);
+    if (mailbox_cliente_id == -1) {
+        perror("Error creando mailbox cliente");
+        return -1;
+    }
+    
+    // Conectar al mailbox del servidor (usando el nombre de la catacumba)
+    key_t key_servidor = ftok(nombre_catacumba, MAILBOX_SOLICITUDES_SUFIJO);
+    mailbox_servidor_id = msgget(key_servidor, 0666);
+    if (mailbox_servidor_id == -1) {
+        perror("Error conectando al servidor");
+        return -1;
+    }
+    
+    return 0;
+}
+
+// Función para obtener la memoria compartida del mapa
+int obtener_memoria_compartida(char *nombre_catacumba) {
+    char nombre_mapa[256];
+    char nombre_estado[256];
+    
+    // Construir nombres de memoria compartida
+    snprintf(nombre_mapa, sizeof(nombre_mapa), "%s%s", MEMORIA_MAPA_PREFIJO, nombre_catacumba);
+    snprintf(nombre_estado, sizeof(nombre_estado), "%s%s", MEMORIA_ESTADO_PREFIJO, nombre_catacumba);
+    
+    // Abrir memoria compartida del mapa
+    int fd_mapa = shm_open(nombre_mapa, O_RDONLY, 0664);
+    if (fd_mapa == -1) {
+        perror("Error abriendo memoria compartida del mapa");
+        return -1;
+    }
+    
+    // Mapear memoria del mapa
+    mapa_compartido = mmap(NULL, FILAS * COLUMNAS, PROT_READ, MAP_SHARED, fd_mapa, 0);
+    if (mapa_compartido == MAP_FAILED) {
+        perror("Error mapeando memoria del mapa");
+        close(fd_mapa);
+        return -1;
+    }
+    close(fd_mapa);
+}
+
+// Función para enviar solicitud de conexión al servidor
+int enviar_conexion(int tipo_jugador, int fila, int columna) {
+    struct SolicitudServidor solicitud;
+    struct RespuestaServidor respuesta;
+    
+    solicitud.mtype = getpid();
+    solicitud.codigo = CONEXION;
+    solicitud.clave_mailbox_respuestas = mailbox_cliente_id;
+    solicitud.fila = fila;
+    solicitud.columna = columna;
+    solicitud.tipo = (tipo_jugador == JUGADOR_EXPLORADOR) ? RAIDER : GUARDIAN; //futuro caracter_jugador/tipo_jugador
+    
+    // Enviar solicitud
+    if (msgsnd(mailbox_servidor_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
+        perror("Error enviando solicitud de conexión");
+        return -1;
+    }
+    
+    // Recibir respuesta
+    if (msgrcv(mailbox_cliente_id, &respuesta, sizeof(respuesta) - sizeof(long), mi_pid, 0) == -1) {
+        perror("Error recibiendo respuesta de conexión");
+        return -1;
+    }
+    
+    return respuesta.codigo;
+}
+
+// Función para enviar movimiento al servidor
+int enviar_accion(int nueva_fila, int nueva_columna,int tipo_mensaje) {
+    struct SolicitudServidor solicitud;
+    
+    solicitud.mtype = getpid();
+    solicitud.codigo = tipo_mensaje;
+    solicitud.clave_mailbox_respuestas = mailbox_cliente_id;
+    solicitud.fila = nueva_fila;
+    solicitud.columna = nueva_columna;
+    solicitud.tipo = (tipo_jugador == JUGADOR_EXPLORADOR) ? RAIDER : GUARDIAN; //futuro caracter_jugador/tipo_jugador
+    
+    if (msgsnd(mailbox_servidor_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
+        perror("Error enviando movimiento");
+        return -1;
+    }
+    
+    return 0;
+}
 void draw_static_header() {
     // Dibujar barra superior fija con información del juego
     attron(COLOR_PAIR(4));
@@ -78,6 +176,13 @@ bool es_atrapable(char celda) {
     return celda == caracter_atrapable;
 }
 
+void terminarPartida(int posicion_x, int posicion_y) {
+    endwin();
+    munmap(map, HEIGHT * (WIDTH + 1));
+    enviar_accion(posicion_x, posicion_y, DESCONEXION);
+    msgctl(mailbox_cliente_id, IPC_RMID, NULL);
+}
+
 int jugar_partida(int tipo, char *shm_name) {
 
     int px = 1;
@@ -99,17 +204,11 @@ int jugar_partida(int tipo, char *shm_name) {
     }
     
 
-    // Abrir memoria compartida
-    int shm_fd = shm_open(shm_name, O_RDONLY, 0664);
-    if (shm_fd == -1) {
-        perror("shm_open");
-        return 1;
-    }
-    map = mmap(NULL, HEIGHT * (WIDTH + 1), PROT_READ, MAP_SHARED, shm_fd, 0);
-    if (map == MAP_FAILED) {
-        perror("mmap");
-        return 1;
-    }
+    // conectar con servidor
+    conectar_servidor(shm_name);
+    enviar_conexion(tipo_jugador, px, py);
+    obtener_memoria_compartida(shm_name);
+    
 
     initscr();
     cbreak();
@@ -152,8 +251,6 @@ int jugar_partida(int tipo, char *shm_name) {
         mvaddch(py, px, caracter_jugador);
         refresh();
     }
-    endwin();
-    munmap(map, HEIGHT * (WIDTH + 1));
-    close(shm_fd);
+    terminarPartida();
     return 0;
 }
