@@ -13,6 +13,7 @@
 #include <signal.h>
 #define _GNU_SOURCE
 
+
 // expresiones utiles para la generacion posiciones
 #define RANDOM_FILAS()(1 + rand() % (FILAS-2));
 #define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
@@ -21,10 +22,19 @@ void atenderSolicitud(struct SolicitudServidor *solicitud);
 void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
 
 int conectarJugador(struct Jugador *jugador);
-int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]);
+int moverJugador(struct Jugador *jugador);
 int desconectarJugador(long pid);
+int capturarTesoro(struct Jugador *jugador);
+int capturarRaider(struct Jugador *jugador);
 int buscarJugador(long pid);
+void generarTesoros();
+
+
+// UTILS
 void consultarMostrar();
+void imprimirTesoros();
+void imprimirEstado();
+
 
 // =========================
 //      VARIABLES GLOBALES
@@ -44,7 +54,7 @@ int mailbox_solicitudes_clave;
 int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
 int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 
-pthread_t hilo_solicitud;
+pthread_t hilo_directorio; // util en un futuro
 
 // =========================
 //      UTILS
@@ -320,17 +330,18 @@ void spawnearJugador(struct Jugador *jugador)
 }
 
 
-void generarTesoros(struct Tesoro tesoros[], char mapa[FILAS][COLUMNAS]) {
-    int fila, columna, i;
-    for (i = 0; i < MAX_TESOROS; i++) {
-        do {
-            fila = RANDOM_FILAS();
-            columna = RANDOM_COLMS();
-        } while (mapa[fila][columna] == VACIO);
-        mapa[fila][columna] = TESORO;
-        tesoros[i].id = i;
-        tesoros[i].posicion = (struct Posicion){fila, columna};
-
+void generarTesoros() {
+    int fila, columna, i = 0;
+    while (estado->cant_tesoros < max_tesoros && i < MAX_TESOROS) {
+        fila = RANDOM_FILAS();
+        columna = RANDOM_COLMS();
+        if (mapa[fila][columna] == VACIO) {
+            mapa[fila][columna] = TESORO;
+            tesoros[i].id = i;
+            tesoros[i].posicion = (struct Posicion){fila, columna};
+            estado->cant_tesoros++;
+            i++;
+        }
     }
 }
 
@@ -517,7 +528,7 @@ void setup(char rutaMapa[], char rutaConfig[])
     estado->cant_raiders = 0;
     estado->cant_jugadores = 0;
     estado->cant_tesoros = 0;
-
+    generarTesoros();
     // Avisar al proceso directorio
     // Iniciar comunicación con directorio
     struct solicitud solicitud_directorio;
@@ -600,57 +611,93 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
     struct RespuestaServidor respuesta;
     respuesta.mtype = solicitud->mtype;
 
+    int codigo; // codigo interno
+
+    // TODO: modificar los metodos de atencion para pasar &respuesta
+    // como argumento y construir la respuesta directamente,
+    // evitando if dentro de los case
     switch (solicitud->codigo) {
     case CONEXION:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("\t\tJugador (%ld) solicita conectarse...\n", jugador.pid);
+        printf("\tJugador (%ld) solicita conectarse...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
         if (conectarJugador(&jugador) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Intento fallido, no se conecto jugador");
-            respuesta.codigo = 0;
+            respuesta.codigo = ERROR;
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador conectado con exito");
-            respuesta.codigo = 1;
+            respuesta.codigo = OK;
         }
         break;
     case DESCONEXION:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("Jugador (%ld) solicita desconectarse...\n", jugador.pid);
+        printf("\tJugador (%ld) solicita desconectarse...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
         if (desconectarJugador(jugador.pid) <0) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
-            respuesta.codigo = 0;
+            respuesta.codigo = ERROR;
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador desconectado con exito");
-            respuesta.codigo = 1;
+            respuesta.codigo = OK;
         }
         break;
-    case MOVERSE: // mueve jugador, actualiza memoria (las validaciones las realizan clientes)
+    case MOVIMIENTO:
         printf("\n═══════════════════════════════════════════════════════════════\n");
-        printf("Jugador (%ld) se mueve...\n", jugador.pid);
+        printf("\tJugador (%ld) se mueve...\n", jugador.pid);
         printf("═══════════════════════════════════════════════════════════════\n\n");
-        if (moverJugador(&jugador, mapa) < 0) { 
-            // no deberia llegar aca pero por las dudas lo pongo
+        if (moverJugador(&jugador) < 0) { 
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "no encontro al jugador");
-            respuesta.codigo = 0;
-        }
+            respuesta.codigo = ERROR;
+        } else {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
             "Jugador se movio con exito");
-        respuesta.codigo = 1;
+        respuesta.codigo = OK;}
         break;
-    case NOTIFICACION:
-        // TODO: ?? 
+    case TESORO_CAPTURADO:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\tJugador (%ld) intenta capturar tesoro...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+
+        codigo = capturarTesoro(&jugador);
+        if (codigo == 0) {
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
+            respuesta.codigo = OK;
+        } else if (codigo == SIN_TESOROS) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan tesoros en el mapa");
+            respuesta.codigo = SIN_TESOROS;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "No hay tesoro en esta posicion");
+            respuesta.codigo = ERROR;
+        }
+        break;
+    case RAIDER_CAPTURADO:
+        printf("\n═══════════════════════════════════════════════════════════════\n");
+        printf("\tGuardían (%ld) intenta capturar raider...\n", jugador.pid);
+        printf("═══════════════════════════════════════════════════════════════\n\n");
+
+        codigo = capturarRaider(&jugador);
+        if (codigo == 0) {
+        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Raider capturado con exito");
+            respuesta.codigo = OK;
+        } else if (codigo == SIN_RAIDERS) {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan raiders en el mapa");
+            respuesta.codigo = SIN_RAIDERS;
+        } else {
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "No hay raider en esta posicion");
+            respuesta.codigo = ERROR;
+        }
         break;
     default:
         break;
     }
 
     responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
+    imprimirEstado();
 }
 
 void responderSolicitud(int clave_mailbox_respuestas,
@@ -673,20 +720,15 @@ void responderSolicitud(int clave_mailbox_respuestas,
 }
 
 int conectarJugador(struct Jugador *jugador) {
-    // verificar
-    if (!aceptarJugador(jugador)) return -1;
-
-    // darle una posicion
-    spawnearJugador(jugador);
-    
-    // incrementar cantidad total y del tipo del jugador
-    jugadores[estado->cant_jugadores++] = *jugador;
+    // if (buscarJugador(jugador->pid) != -1) return -1; // ya existe
+    if (!aceptarJugador(jugador)) return -1; // verificar
+    spawnearJugador(jugador); // darle una posicion
+    jugadores[estado->cant_jugadores++] = *jugador; // incrementar cantidad
     (jugador->tipo == RAIDER) ? estado->cant_raiders++ : estado->cant_guardianes++;
     return 0;
 }
 
-// comparar y actualizar posicion de jugador en Jugadores y Mapa
-int moverJugador(struct Jugador *jugador, char mapa[FILAS][COLUMNAS]) {
+int moverJugador(struct Jugador *jugador) {
     int pos = buscarJugador(jugador->pid);
     if (pos < 0) return -1;
 
@@ -715,6 +757,59 @@ int desconectarJugador(long pid) {
     return 0;
 }
 
+int capturarTesoro(struct Jugador *jugador) {
+    if (estado->cant_tesoros == 0) return SIN_TESOROS;
+
+    int pos = buscarJugador(jugador->pid);
+    if (pos < 0) return -1;
+    if (jugadores[pos].tipo == GUARDIAN) return -1;
+    
+    int fila = jugador->posicion.fila;
+    int columna = jugador->posicion.columna;
+
+    if (mapa[fila][columna] == TESORO) {
+        mapa[fila][columna] = RAIDER;
+        estado->cant_tesoros--;
+        mapa[jugadores[pos].posicion.fila]
+            [jugadores[pos].posicion.columna] = VACIO;
+        jugadores[pos].posicion = jugador->posicion;
+        return 0;
+    }
+    return -1;
+}
+
+int capturarRaider(struct Jugador *jugador) {
+    if (estado->cant_raiders == 0) return SIN_RAIDERS;
+    
+    int pos = buscarJugador(jugador->pid);
+    if (pos < 0) return -1;
+    if (jugador->tipo == RAIDER) return -1;
+
+    int fila = jugador->posicion.fila;      
+    int columna = jugador->posicion.columna;
+
+    int i, j;
+    for (i = 0; i < estado->cant_jugadores; i++) {
+        if (i == pos) continue; // no se captura
+        if (jugadores[i].tipo == RAIDER &&
+            jugadores[i].posicion.fila == fila &&
+            jugadores[i].posicion.columna == columna) {
+            mapa[fila][columna] = GUARDIAN;
+            
+            mapa[jugadores[pos].posicion.fila]
+                [jugadores[pos].posicion.columna] = VACIO;
+            jugadores[pos].posicion = jugador->posicion;
+            for (j = i; j < estado->cant_jugadores - 1; j++) {
+                jugadores[j] = jugadores[j + 1];
+            }
+            estado->cant_jugadores--;
+            estado->cant_raiders--;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 int buscarJugador(long pid) {
     int i;
     for (i = 0; i < estado->cant_jugadores; i++)
@@ -730,4 +825,26 @@ void consultarMostrar(){
     scanf(" %c", &respuesta);
 
     if (respuesta == 'y' || respuesta == 'Y') mostrarMapa();
+}
+
+void imprimirEstado() {
+    printf("\n===== ESTADO DEL SERVIDOR =====\n");
+    printf("- Máx. jugadores permitidos : %d\n", estado->max_jugadores);
+    printf("- Cantidad total de jugadores: %d\n", estado->cant_jugadores);
+    printf("- Cantidad de Raiders        : %d\n", estado->cant_raiders);
+    printf("- Cantidad de Guardianes     : %d\n", estado->cant_guardianes);
+    printf("- Cantidad de Tesoros        : %d\n", estado->cant_tesoros);
+    printf("================================\n\n");
+}
+
+// solo sirve para verificar
+void imprimirTesoros() {
+    printf("\n===== Tesoros Posiciones =====\n");
+    int i;
+    for (i = 0; i < estado->cant_tesoros; i++) {
+        printf("tesoro %d con pos [%d, %d]\n",
+            tesoros[i].id,
+            tesoros[i].posicion.fila,
+            tesoros[i].posicion.columna);
+    }
 }
