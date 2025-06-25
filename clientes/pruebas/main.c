@@ -59,8 +59,7 @@ typedef struct
 // Función para buscar catacumbas disponibles
 int buscar_catacumbas_disponibles()
 {
-    // Cerrar ncurses temporalmente para mostrar mensajes
-    endwin();
+ 
     
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
