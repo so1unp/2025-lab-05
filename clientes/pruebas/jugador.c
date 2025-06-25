@@ -70,6 +70,8 @@ int obtener_memoria_compartida(char *nombre_catacumba) {
         return -1;
     }
     close(fd_mapa);
+
+    return 0;
 }
 
 // Función para enviar solicitud de conexión al servidor
@@ -108,7 +110,7 @@ int enviar_accion(int nueva_fila, int nueva_columna,int tipo_mensaje) {
     solicitud.clave_mailbox_respuestas = mailbox_cliente_id;
     solicitud.fila = nueva_fila;
     solicitud.columna = nueva_columna;
-    solicitud.tipo = (tipo_jugador == JUGADOR_EXPLORADOR) ? RAIDER : GUARDIAN; //futuro caracter_jugador/tipo_jugador
+    solicitud.tipo = (caracter_jugador == JUGADOR_EXPLORADOR) ? RAIDER : GUARDIAN; //futuro caracter_jugador/tipo_jugador
     
     if (msgsnd(mailbox_servidor_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
         perror("Error enviando movimiento");
@@ -206,7 +208,7 @@ int jugar_partida(int tipo, char *shm_name) {
 
     // conectar con servidor
     conectar_servidor(shm_name);
-    enviar_conexion(tipo_jugador, px, py);
+    enviar_conexion(caracter_jugador, px, py);
     obtener_memoria_compartida(shm_name);
     
 
@@ -251,6 +253,6 @@ int jugar_partida(int tipo, char *shm_name) {
         mvaddch(py, px, caracter_jugador);
         refresh();
     }
-    terminarPartida();
+    terminarPartida(jugador_posicion.posX, jugador_posicion.posY);
     return 0;
 }

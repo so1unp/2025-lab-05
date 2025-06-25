@@ -628,7 +628,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador conectado con exito");
-            respuesta.codigo = OK;
+            respuesta.codigo = S_OK;
         }
         break;
     case DESCONEXION:
@@ -642,7 +642,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         } else {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
                 "Jugador desconectado con exito");
-            respuesta.codigo = OK;
+            respuesta.codigo = S_OK;
         }
         break;
     case MOVIMIENTO:
@@ -656,7 +656,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         } else {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES,
             "Jugador se movio con exito");
-        respuesta.codigo = OK;}
+        respuesta.codigo = S_OK;}
         break;
     case TESORO_CAPTURADO:
         printf("\n═══════════════════════════════════════════════════════════════\n");
@@ -666,7 +666,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         codigo = capturarTesoro(&jugador);
         if (codigo == 0) {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
-            respuesta.codigo = OK;
+            respuesta.codigo = S_OK;
         } else if (codigo == SIN_TESOROS) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan tesoros en el mapa");
             respuesta.codigo = SIN_TESOROS;
@@ -683,7 +683,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
         codigo = capturarRaider(&jugador);
         if (codigo == 0) {
         snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Raider capturado con exito");
-            respuesta.codigo = OK;
+            respuesta.codigo = S_OK;
         } else if (codigo == SIN_RAIDERS) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan raiders en el mapa");
             respuesta.codigo = SIN_RAIDERS;
