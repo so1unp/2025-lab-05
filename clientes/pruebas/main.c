@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include "../juego_constantes.h"
+#include "jugador.h"
 #include "../../directorio/directorio.h"
 #include <fcntl.h>
 #include <sys/types.h>
@@ -12,23 +13,27 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "../../catacumbas/catacumbas.h" // Para FILAS y COLUMNAS
+#include "../../catacumbas/catacumbas.h"
+#include "status.h"
 
 #define MENU_PRINCIPAL_ITEMS 5
 #define MENU_WIDTH 50
 
-typedef struct {
+typedef struct
+{
     char nombre[64];
-    char direccion[128];   // Dirección de la memoria compartida
-    int mailbox;          // Mailbox del mapa
+    char direccion[128]; // Dirección de la memoria compartida
+    int mailbox;         // Mailbox del mapa
     int players_connected;
     int max_players;
 } Map;
 
 // Variables globales para rol y mapa seleccionados
+int tipo_jugador = JUGADOR_EXPLORADOR;     // o JUGADOR_GUARDIAN según selección
+char nombre_catacumba[128] = "catacumba1"; // ejemplo
 char selected_role[50] = "NO SELECCIONADO";
 char selected_map[50] = "NO SELECCIONADO";
-char player_character = 'J'; // Valor por defecto para el personaje del jugador
+char player_character = 'E'; // Valor por defecto para el personaje del jugador
 char selected_shm_path[128];
 int selected_mailbox;
 int jugador_x = 1, jugador_y = 1; // Valores por defecto
@@ -63,6 +68,8 @@ int ejecutar_seleccion_mapa();
 int ejecutar_seleccion_rol();
 int mostrar_listado_mapas_y_seleccionar();
 void mostrar_mapa_real(); // <-- AGREGA ESTA LÍNEA
+void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar);
+
 
 void mostrar_catacumbas_formateadas(char *datos);
 
@@ -93,13 +100,14 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors()) {
+        if (has_colors())
+        {
             start_color();
-            init_pair(1, COLOR_BLACK, COLOR_WHITE);
-            init_pair(2, COLOR_WHITE, COLOR_BLACK);
-            init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-            init_pair(4, COLOR_CYAN, COLOR_BLACK);
-            init_pair(5, COLOR_GREEN, COLOR_BLACK);
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
         }
         return 0;
     }
@@ -124,13 +132,14 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors()) {
+        if (has_colors())
+        {
             start_color();
-            init_pair(1, COLOR_BLACK, COLOR_WHITE);
-            init_pair(2, COLOR_WHITE, COLOR_BLACK);
-            init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-            init_pair(4, COLOR_CYAN, COLOR_BLACK);
-            init_pair(5, COLOR_GREEN, COLOR_BLACK);
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
         }
         return 0;
     }
@@ -147,13 +156,14 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors()) {
+        if (has_colors())
+        {
             start_color();
-            init_pair(1, COLOR_BLACK, COLOR_WHITE);
-            init_pair(2, COLOR_WHITE, COLOR_BLACK);
-            init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-            init_pair(4, COLOR_CYAN, COLOR_BLACK);
-            init_pair(5, COLOR_GREEN, COLOR_BLACK);
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
         }
         return 0;
     }
@@ -166,19 +176,21 @@ int buscar_catacumbas_disponibles()
 
         char *saveptr1, *saveptr2;
         char *catacumba = strtok_r(resp.datos, ";", &saveptr1);
-        while (catacumba && num_maps < 20) {
+        while (catacumba && num_maps < 20)
+        {
             char *nombre = strtok_r(catacumba, "|", &saveptr2);
             char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
-            strtok_r(NULL, "|", &saveptr2); // propCatacumba (puedes ignorar)
+            strtok_r(NULL, "|", &saveptr2);                   // propCatacumba (puedes ignorar)
             char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
             char *cantJug = strtok_r(NULL, "|", &saveptr2);
             char *maxJug = strtok_r(NULL, "|", &saveptr2);
 
-            if (nombre && direccion && mailbox_str && cantJug && maxJug) {
-                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre)-1);
-                maps[num_maps].nombre[sizeof(maps[num_maps].nombre)-1] = '\0';
-                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion)-1);
-                maps[num_maps].direccion[sizeof(maps[num_maps].direccion)-1] = '\0';
+            if (nombre && direccion && mailbox_str && cantJug && maxJug)
+            {
+                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre) - 1);
+                maps[num_maps].nombre[sizeof(maps[num_maps].nombre) - 1] = '\0';
+                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion) - 1);
+                maps[num_maps].direccion[sizeof(maps[num_maps].direccion) - 1] = '\0';
                 maps[num_maps].mailbox = atoi(mailbox_str);
                 maps[num_maps].players_connected = atoi(cantJug);
                 maps[num_maps].max_players = atoi(maxJug);
@@ -187,7 +199,8 @@ int buscar_catacumbas_disponibles()
             catacumba = strtok_r(NULL, ";", &saveptr1);
         }
 
-        if (num_maps == 0) {
+        if (num_maps == 0)
+        {
             endwin();
             printf("ℹ️  No hay catacumbas disponibles.\n");
             printf("Presiona Enter para continuar...");
@@ -197,22 +210,24 @@ int buscar_catacumbas_disponibles()
             noecho();
             keypad(stdscr, TRUE);
             curs_set(0);
-            if (has_colors()) {
+            if (has_colors())
+            {
                 start_color();
-                init_pair(1, COLOR_BLACK, COLOR_WHITE);
-                init_pair(2, COLOR_WHITE, COLOR_BLACK);
-                init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-                init_pair(4, COLOR_CYAN, COLOR_BLACK);
-                init_pair(5, COLOR_GREEN, COLOR_BLACK);
+                init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+                init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+                init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+                init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+                init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
             }
             return 0;
         }
 
         int seleccionado = mostrar_seleccion_mapa(maps, num_maps);
-        if (seleccionado >= 0 && seleccionado < num_maps) {
+        if (seleccionado >= 0 && seleccionado < num_maps)
+        {
             set_game_map(maps[seleccionado].nombre);
-            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path)-1);
-            selected_shm_path[sizeof(selected_shm_path)-1] = '\0';
+            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path) - 1);
+            selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
             selected_mailbox = maps[seleccionado].mailbox;
 
             mostrar_mapa_real(); // <-- Muestra el mapa real
@@ -230,13 +245,14 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors()) {
+        if (has_colors())
+        {
             start_color();
-            init_pair(1, COLOR_BLACK, COLOR_WHITE);
-            init_pair(2, COLOR_WHITE, COLOR_BLACK);
-            init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-            init_pair(4, COLOR_CYAN, COLOR_BLACK);
-            init_pair(5, COLOR_GREEN, COLOR_BLACK);
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
         }
         return 0;
     }
@@ -327,11 +343,11 @@ void mostrar_catacumbas_formateadas(char *datos)
     if (has_colors())
     {
         start_color();
-        init_pair(1, COLOR_BLACK, COLOR_WHITE);
-        init_pair(2, COLOR_WHITE, COLOR_BLACK);
-        init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-        init_pair(4, COLOR_CYAN, COLOR_BLACK);
-        init_pair(5, COLOR_GREEN, COLOR_BLACK);
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
     }
 }
 
@@ -359,11 +375,11 @@ int mostrar_menu_principal()
     if (has_colors())
     {
         start_color();
-        init_pair(1, COLOR_BLACK, COLOR_WHITE);
-        init_pair(2, COLOR_WHITE, COLOR_BLACK);
-        init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-        init_pair(4, COLOR_CYAN, COLOR_BLACK);
-        init_pair(5, COLOR_GREEN, COLOR_BLACK);
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
     }
 
     while (1)
@@ -452,11 +468,11 @@ int mostrar_menu_principal()
                     if (has_colors())
                     {
                         start_color();
-                        init_pair(1, COLOR_BLACK, COLOR_WHITE);
-                        init_pair(2, COLOR_WHITE, COLOR_BLACK);
-                        init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-                        init_pair(4, COLOR_CYAN, COLOR_BLACK);
-                        init_pair(5, COLOR_GREEN, COLOR_BLACK);
+                        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+                        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+                        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+                        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+                        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
                     }
                 }
             }
@@ -495,7 +511,6 @@ int main()
 // Implementaciones que llaman a las funciones externas
 int ejecutar_seleccion_rol()
 {
-
     int resultado = mostrar_menu_rol();
 
     // Establecer el rol basado en el resultado
@@ -503,12 +518,15 @@ int ejecutar_seleccion_rol()
     {
     case 'E': // JUGADOR_EXPLORADOR
         set_game_role("EXPLORADOR");
+        player_character = 'E'; // carácter que se use para explorador
         break;
     case 'G': // JUGADOR_GUARDIAN
         set_game_role("GUARDIAN");
+        player_character = 'G'; // carácter que se use para guardián
         break;
     default:
         set_game_role("NO SELECCIONADO");
+        player_character = 'E'; // valor por defecto
         break;
     }
 
@@ -529,14 +547,17 @@ int ejecutar_base()
 
     return resultado;
 }
-void setPlayChar(char c) {
+void setPlayChar(char c)
+{
     player_character = c;
 }
-int mostrar_listado_mapas_y_seleccionar() {
+int mostrar_listado_mapas_y_seleccionar()
+{
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
 
-    if (mailbox_solicitudes == -1 || mailbox_respuestas == -1) {
+    if (mailbox_solicitudes == -1 || mailbox_respuestas == -1)
+    {
         endwin();
         printf("❌ Directorio no disponible\n");
         printf("Presiona Enter para regresar al menú principal...");
@@ -553,7 +574,8 @@ int mostrar_listado_mapas_y_seleccionar() {
     msg.tipo = OP_LISTAR;
     msg.texto[0] = '\0';
 
-    if (msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
+    if (msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0) == -1)
+    {
         endwin();
         perror("Error enviando solicitud");
         printf("Presiona Enter para regresar al menú principal...");
@@ -562,7 +584,8 @@ int mostrar_listado_mapas_y_seleccionar() {
         return 0;
     }
 
-    if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1) {
+    if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1)
+    {
         endwin();
         perror("Error recibiendo respuesta");
         printf("Presiona Enter para regresar al menú principal...");
@@ -571,24 +594,27 @@ int mostrar_listado_mapas_y_seleccionar() {
         return 0;
     }
 
-    if (resp.codigo == RESP_OK) {
+    if (resp.codigo == RESP_OK)
+    {
         Map maps[20];
         int num_maps = 0;
         char *saveptr1, *saveptr2;
         char *catacumba = strtok_r(resp.datos, ";", &saveptr1);
-        while (catacumba && num_maps < 20) {
+        while (catacumba && num_maps < 20)
+        {
             char *nombre = strtok_r(catacumba, "|", &saveptr2);
             char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
-            strtok_r(NULL, "|", &saveptr2); // propCatacumba (puedes ignorar)
+            strtok_r(NULL, "|", &saveptr2);                   // propCatacumba (se podria ignorar
             char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
             char *cantJug = strtok_r(NULL, "|", &saveptr2);
             char *maxJug = strtok_r(NULL, "|", &saveptr2);
 
-            if (nombre && direccion && mailbox_str && cantJug && maxJug) {
-                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre)-1);
-                maps[num_maps].nombre[sizeof(maps[num_maps].nombre)-1] = '\0';
-                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion)-1);
-                maps[num_maps].direccion[sizeof(maps[num_maps].direccion)-1] = '\0';
+            if (nombre && direccion && mailbox_str && cantJug && maxJug)
+            {
+                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre) - 1);
+                maps[num_maps].nombre[sizeof(maps[num_maps].nombre) - 1] = '\0';
+                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion) - 1);
+                maps[num_maps].direccion[sizeof(maps[num_maps].direccion) - 1] = '\0';
                 maps[num_maps].mailbox = atoi(mailbox_str);
                 maps[num_maps].players_connected = atoi(cantJug);
                 maps[num_maps].max_players = atoi(maxJug);
@@ -597,7 +623,8 @@ int mostrar_listado_mapas_y_seleccionar() {
             catacumba = strtok_r(NULL, ";", &saveptr1);
         }
 
-        if (num_maps == 0) {
+        if (num_maps == 0)
+        {
             endwin();
             printf("ℹ️  No hay catacumbas disponibles.\n");
             printf("Presiona Enter para continuar...");
@@ -607,14 +634,17 @@ int mostrar_listado_mapas_y_seleccionar() {
         }
 
         int seleccionado = mostrar_seleccion_mapa(maps, num_maps);
-        if (seleccionado >= 0 && seleccionado < num_maps) {
+        if (seleccionado >= 0 && seleccionado < num_maps)
+        {
             set_game_map(maps[seleccionado].nombre);
-            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path)-1);
-            selected_shm_path[sizeof(selected_shm_path)-1] = '\0';
+            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path) - 1);
+            selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
             selected_mailbox = maps[seleccionado].mailbox;
         }
         return seleccionado;
-    } else {
+    }
+    else
+    {
         endwin();
         printf("❌ Error: %s\n", resp.datos);
         printf("Presiona Enter para regresar al menú principal...");
@@ -623,69 +653,270 @@ int mostrar_listado_mapas_y_seleccionar() {
         return 0;
     }
 }
-void mostrar_mapa_real() {
-    int fd = shm_open(selected_shm_path, O_RDONLY, 0666);
-    if (fd == -1) {
+
+// Inicializa la memoria compartida y retorna el puntero al mapa
+char *inicializar_memoria_mapa(int *fd, size_t *size)
+{
+    *fd = shm_open(selected_shm_path, O_RDONLY, 0666);
+    if (*fd == -1)
+    {
         endwin();
         perror("Error abriendo memoria compartida del mapa");
         printf("Presiona Enter para continuar...");
         getchar();
         initscr();
-        return;
+        return NULL;
     }
-
-    size_t size = FILAS * COLUMNAS;
-    char *mapa = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
-    if (mapa == MAP_FAILED) {
+    *size = FILAS * COLUMNAS;
+    char *mapa = mmap(NULL, *size, PROT_READ, MAP_SHARED, *fd, 0);
+    if (mapa == MAP_FAILED)
+    {
         endwin();
         perror("Error mapeando memoria compartida del mapa");
         printf("Presiona Enter para continuar...");
         getchar();
         initscr();
-        close(fd);
-        return;
+        close(*fd);
+        return NULL;
     }
+    return mapa;
+}
 
-    // Buscar posición inicial del jugador
-    int jugador_x = 1, jugador_y = 1;
-    for (int y = 0; y < FILAS; y++) {
-        for (int x = 0; x < COLUMNAS; x++) {
-            if (mapa[y * COLUMNAS + x] == ' ') {
-                jugador_y = y;
-                jugador_x = x;
-                goto encontrado;
+// Busca la posición inicial del jugador en el mapa
+void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
+{
+    for (int y = 0; y < FILAS; y++)
+    {
+        for (int x = 0; x < COLUMNAS; x++)
+        {
+            if (mapa[y * COLUMNAS + x] == ' ')
+            {
+                *jugador_y = y;
+                *jugador_x = x;
+                return;
             }
         }
     }
-encontrado:;
+    // Si no encuentra, deja los valores por defecto
+}
 
-    // Bucle de movimiento
+// Dibuja el mapa y el jugador en pantalla
+void dibujar_mapa(const char *mapa, int jugador_x, int jugador_y, char player_character)
+{
+    clear();
+    for (int y = 0; y < FILAS; y++)
+    {
+        for (int x = 0; x < COLUMNAS; x++)
+        {
+            mvaddch(y, x, mapa[y * COLUMNAS + x]);
+        }
+    }
+    mvaddch(jugador_y, jugador_x, player_character);
+    refresh();
+}
+
+// Procesa el movimiento del jugador y colisiones
+int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y)
+{
+    if (destino == '#')
+    {
+        // Es una pared, no moverse
+        return 0;
+    }
+    if (destino == '$')
+    {
+        // Es un tesoro, lo recoges
+        mvprintw(FILAS + 1, 0, "¡Tesoro recogido!");
+        refresh();
+        sleep(0.2);
+    }
+    if (destino == 'A' || destino == 'J')
+    {
+        // Colisión con otro jugador
+        mvprintw(FILAS + 1, 0, "¡Colisión con otro jugador!");
+        refresh();
+        sleep(0.2);
+        return 0;
+    }
+    // Movimiento válido
+    *jugador_x = new_x;
+    *jugador_y = new_y;
+    return 1;
+}
+
+// Envía el movimiento al servidor
+void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id)
+{
+    struct SolicitudServidor solicitud;
+    solicitud.mtype = getpid();
+    solicitud.codigo = MOVIMIENTO;
+    solicitud.clave_mailbox_respuestas = clave_mailbox_respuestas;
+    solicitud.fila = jugador_y;
+    solicitud.columna = jugador_x;
+    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
+    msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0);
+}
+
+// Bucle principal del juego
+void mostrar_mapa_real()
+{
+    // Inicializa colores SOLO para el mapa real
+    if (has_colors()) {
+        start_color();
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
+        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+    }
+
+    int fd;
+    size_t size;
+    char *mapa = inicializar_memoria_mapa(&fd, &size);
+    if (!mapa)
+        return;
+
+    key_t clave_mailbox_respuestas = getpid() * MAILBOX_SOLICITUDES_SUFIJO;
+    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
+
+    int jugador_x = 1, jugador_y = 1;
+    buscar_posicion_inicial(mapa, &jugador_x, &jugador_y);
+
     int ch;
     keypad(stdscr, TRUE);
     curs_set(0);
-    while ((ch = getch()) != 'q') {
+
+    while ((ch = getch()) != 'q')
+    {
         int new_x = jugador_x, new_y = jugador_y;
-        if (ch == KEY_UP) new_y--;
-        if (ch == KEY_DOWN) new_y++;
-        if (ch == KEY_LEFT) new_x--;
-        if (ch == KEY_RIGHT) new_x++;
-        if (new_y >= 0 && new_y < FILAS && new_x >= 0 && new_x < COLUMNAS &&
-            mapa[new_y * COLUMNAS + new_x] == ' ') {
-            jugador_x = new_x;
-            jugador_y = new_y;
+        if (ch == KEY_UP)
+            new_y--;
+        if (ch == KEY_DOWN)
+            new_y++;
+        if (ch == KEY_LEFT)
+            new_x--;
+        if (ch == KEY_RIGHT)
+            new_x++;
+
+        // Control de bordes
+        if (new_y < 0 || new_y >= FILAS || new_x < 0 || new_x >= COLUMNAS)
+            continue;
+
+        char destino = mapa[new_y * COLUMNAS + new_x];
+
+        // Procesar movimiento y colisiones
+        if (procesar_movimiento(destino, &jugador_x, &jugador_y, new_x, new_y))
+        {
+            enviar_movimiento_al_servidor(jugador_x, jugador_y, clave_mailbox_respuestas, mailbox_solicitudes_id);
         }
-        clear();
-        for (int y = 0; y < FILAS; y++) {
-            for (int x = 0; x < COLUMNAS; x++) {
-                mvaddch(y, x, mapa[y * COLUMNAS + x]);
-            }
-        }
-        mvaddch(jugador_y, jugador_x, player_character);
-        refresh();
+
+        // --- Aquí usas la función coloreada ---
+        dibujar_mapa_coloreado(mapa, FILAS, COLUMNAS, jugador_x, jugador_y, player_character);
     }
 
     munmap(mapa, size);
     close(fd);
 }
 
+// Función para jugar
+void jugar()
+{
+    // Conexión al servidor
+    if (conectar_servidor(nombre_catacumba, tipo_jugador) != 0)
+    {
+        printf("No se pudo conectar al servidor.\n");
+        return;
+    }
 
+    int x = 1, y = 1; // posición inicial
+    int jugando = 1;
+    while (jugando)
+    {
+        // Lógica de movimiento (leer teclado, calcular new_x, new_y, etc)
+        // ...
+
+        // Enviar movimiento
+        if (enviar_movimiento(x, y, tipo_jugador) == 0)
+        {
+            char mensaje[256];
+            int codigo;
+            if (recibir_respuesta(mensaje, &codigo) == 0)
+            {
+                // Mostrar mensaje en pantalla
+                mvprintw(22, 0, "%s", mensaje);
+                refresh();
+                // Si el código indica fin de juego, salir del bucle
+                //el servidor nos tiene que mandar un mensaje de fin de juego, la info esta en status.h 
+                if (codigo == ST_GAME_OVER)
+                    jugando = 0;
+            }
+        }
+        // ...redibujar mapa, actualizar posición, etc...
+    }
+
+    desconectar_servidor();
+}
+
+// Dibuja el mapa recibido del directorio with colores y desplazamiento
+void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar)
+{
+    // Inicializa colores SOLO una vez en tu programa principal, no aquí.
+    // Aquí solo asume que los pares ya están definidos:
+    // 1: Paredes, 2: Tesoro/Jugador, 3: Fondo, 4: Header, 5: Instrucciones
+
+    // Header fijo (opcional)
+    attron(COLOR_PAIR(4));
+    mvprintw(1, 2, "=== MAPA DE CATACUMBAS ===");
+    attroff(COLOR_PAIR(4));
+
+    // Dibuja el mapa desplazado (como en base.c)
+    for (int y = 0; y < filas; y++)
+    {
+        for (int x = 0; x < columnas; x++)
+        {
+            char c = mapa[y * columnas + x];
+            if (c == '#' || c == CELDA_PARED)
+            {
+                attron(COLOR_PAIR(1));
+                mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(1));
+            }
+            else if (c == '$' || c == CELDA_TESORO)
+            {
+                attron(COLOR_PAIR(2));
+                mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(2));
+            }
+            else if (c == ' ' || c == CELDA_VACIA)
+            {
+                attron(COLOR_PAIR(3));
+                mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(3));
+            }
+            else if (c == 'E' || c == 'A' || c == 'J' || c == CELDA_EXPLORADOR || c == CELDA_GUARDIAN)
+            {
+                // Jugadores (puedes usar otro color si quieres distinguirlos)
+                attron(COLOR_PAIR(2) | A_BOLD);
+                mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(2) | A_BOLD);
+            }
+            else
+            {
+                // Otros caracteres
+                mvaddch(y + 4, x + 2, c);
+            }
+        }
+    }
+
+    // Dibuja TU jugador (por encima, para que se vea siempre)
+    attron(COLOR_PAIR(2) | A_BOLD);
+    mvaddch(jugador_y + 4, jugador_x + 2, playerChar);
+    attroff(COLOR_PAIR(2) | A_BOLD);
+
+    // Instrucciones
+    attron(COLOR_PAIR(5));
+    mvprintw(filas + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
+    attroff(COLOR_PAIR(5));
+
+    refresh();
+}
