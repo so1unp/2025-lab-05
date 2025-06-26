@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread -lncurses
+CFLAGS=-Wall -Werror -g -pthread -lncurses -std=c99 -D_XOPEN_SOURCE=700 -lrs
 
 PROGS=main
 
@@ -7,7 +7,7 @@ PROGS=main
 
 all: $(PROGS)
 
-main: main.c seleccion-mapa.c seleccion-rol.c base.c gameover.c
+main: main.c seleccion-mapa.c seleccion-rol.c base.c gameover.c jugador.c
 	$(CC) -o $@ $^ $(CFLAGS)
 
 clean:
