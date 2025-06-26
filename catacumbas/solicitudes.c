@@ -121,7 +121,7 @@ void spawnearJugador(struct Jugador *jugador, struct Arena *arena) {
 // ===================================
 
 int recibirSolicitudes(struct SolicitudServidor *solicitud, int mailbox_solicitudes_id) {
-    if (msgrcv(mailbox_solicitudes_id, solicitud, sizeof(solicitud) - sizeof(long), 0, 0) == -1) {
+    if (msgrcv(mailbox_solicitudes_id, solicitud, sizeof(*solicitud) - sizeof(long), 0, 0) == -1) {
         perror("🚫 msgrcv");
         return 0;
     } else {
