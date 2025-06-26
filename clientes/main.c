@@ -828,6 +828,18 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
 }
 
 
+void mostrar_pantalla_victoria_tesoros() {
+    clear();
+    attron(COLOR_PAIR(2) | A_BOLD);
+    mvprintw(FILAS / 2, (COLUMNAS - 35) / 2, "¡No hay más tesoros, los exploradores ganan!");
+    attroff(COLOR_PAIR(2) | A_BOLD);
+    attron(COLOR_PAIR(5));
+    mvprintw(FILAS / 2 + 2, (COLUMNAS - 25) / 2, "Presiona cualquier tecla...");
+    attroff(COLOR_PAIR(5));
+    refresh();
+    getch();
+}
+
 void jugar()
 {
     if (has_colors()) {
@@ -850,21 +862,19 @@ void jugar()
         return;
 
     int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
-
+    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
     int jugador_x = 1, jugador_y = 1;/* 
     buscar_posicion_inicial(mapa, &jugador_x, &jugador_y); */
 
     int ch;
     keypad(stdscr, TRUE);
     curs_set(0);
-    /* timeout(100); */
+    timeout(100); // getch() no bloqueante, revisa cada 100ms
 
-    while ((ch = getch()) != 'q') {
-        if (ch == ERR) {
-            msync(mapa, FILAS * COLUMNAS, MS_ASYNC);
-            dibujar_mapa_coloreado(mapa, FILAS, COLUMNAS, jugador_x, jugador_y, player_character);
-            continue;
-        }
+    int fin_partida = 0;
+    while (!fin_partida) {
+        ch = getch();
+        if (ch == 'q') break;
 
         int new_x = jugador_x, new_y = jugador_y;
         if (ch == KEY_UP) new_y--;
@@ -879,6 +889,18 @@ void jugar()
 
         if (procesar_movimiento(destino, &jugador_x, &jugador_y, new_x, new_y)) {
             enviar_movimiento_al_servidor(jugador_x, jugador_y, key_respuestas_global, mailbox_solicitudes_id);
+        }
+
+        // Revisar eventos del servidor en el mailbox de respuestas del cliente
+        struct status_msg evento;
+        if (mailbox_respuestas != -1) {
+            // No bloqueante: IPC_NOWAIT
+            if (msgrcv(mailbox_respuestas, &evento, sizeof(evento) - sizeof(long), TYPE_GAME_EVENT, IPC_NOWAIT) != -1) {
+                if (evento.code == ST_ALL_TREASURES) {
+                    mostrar_pantalla_victoria_tesoros();
+                    fin_partida = 1;
+                }
+            }
         }
 
         dibujar_mapa_coloreado();

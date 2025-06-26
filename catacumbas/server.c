@@ -666,8 +666,18 @@ void atenderSolicitud(struct SolicitudServidor *solicitud) {
 
         codigo = capturarTesoro(&jugador);
         if (codigo == 0) {
-        snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
+            snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Tesoro capturado con exito");
             respuesta.codigo = S_OK;
+            // Notificar a todos los clientes si ya no quedan tesoros
+            if (estado->cant_tesoros == 0) {
+                int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
+                struct status_msg msg;
+                msg.mtype = TYPE_GAME_EVENT;
+                msg.code = ST_ALL_TREASURES;
+                strncpy(msg.text, "¡No hay más tesoros, los exploradores ganan!", MAX_MSG-1);
+                msg.text[MAX_MSG-1] = '\0';
+                msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
+            }
         } else if (codigo == SIN_TESOROS) {
             snprintf(respuesta.mensaje, MAX_LONGITUD_MENSAJES, "Ya no quedan tesoros en el mapa");
             respuesta.codigo = SIN_TESOROS;
