@@ -16,11 +16,37 @@
 #define _GNU_SOURCE
 
 
+
+// =========================
+//      VARIABLES GLOBALES
+// =========================
 // expresiones utiles para la generacion posiciones
 #define RANDOM_FILAS()(1 + rand() % (FILAS-2));
 #define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
+struct Tesoro tesoros[MAX_TESOROS];
+struct Jugador jugadores[MAX_JUGADORES];
+struct Estado *estado;
+char (*mapa)[COLUMNAS];
+int max_guardianes = 0;
+int max_raiders = 0;
+int max_tesoros = 0;
+int size_mapa = sizeof(char) * FILAS * COLUMNAS;
+int size_estado = sizeof(struct Estado);
+char memoria_mapa_nombre[128];
+char memoria_estado_nombre[128];
+int mailbox_solicitudes_clave;
+int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
+int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
 
+pthread_t hilo_directorio; // util en un futuro
+
+
+
+// =========================
+//      PROTOTIPOS 
+// =========================
 // void responderSolicitud(int clave_mailbox_respuestas, struct RespuestaServidor *respuesta);
+
 void recibirSolicitudes();
 void atenderSolicitud(struct SolicitudServidor *solicitud);
 
@@ -40,33 +66,13 @@ void generarTesoros();
 
 void construirRespuesta(struct RespuestaServidor *respuesta, int codigo, const char *mensaje);
 
-// UTILS
-void consultarMostrar();
-
-
-// =========================
-//      VARIABLES GLOBALES
-// =========================
-struct Tesoro tesoros[MAX_TESOROS];
-struct Jugador jugadores[MAX_JUGADORES];
-struct Estado *estado;
-char (*mapa)[COLUMNAS];
-int max_guardianes = 0;
-int max_raiders = 0;
-int max_tesoros = 0;
-int size_mapa = sizeof(char) * FILAS * COLUMNAS;
-int size_estado = sizeof(struct Estado);
-char memoria_mapa_nombre[128];
-char memoria_estado_nombre[128];
-int mailbox_solicitudes_clave;
-int memoria_mapa_fd, memoria_estado_fd, mailbox_solicitudes_id;
-int mailbox_directorio_solicitudes_id, mailbox_directorio_respuestas_id;
-
-pthread_t hilo_directorio; // util en un futuro
 
 // =========================
 //      UTILS
 // =========================
+
+void consultarMostrar();
+
 void fatal(char msg[]) {
     perror(msg);
     exit(EXIT_FAILURE);
@@ -76,28 +82,15 @@ void fatal(char msg[]) {
 // =========================
 //      MENSAJERIA
 // =========================
-/**
- * @brief enviar un mensaje a un cliente
- *  
- */
-void enviarRespuestaCliente(struct Jugador *jugador, int codigo, char *mensaje[]){
-
-}
 
 /**
- * @brief Revisar el mailbox en busca de solicitudes posibles
- *  
- */
-void recibirSolicitudesClientes(int mailBox){
-    // fijate que no sea bloqueante el msgrcv
-    while (1) {   
-    }    
-}
-
-/**
- * @brief Leer el mailbox de respuestas del directorio
- * para buscar una respuesta para este servidor
- *  
+ * @brief Lee una respuesta del buzón del directorio.
+ *
+ * Espera de forma bloqueante a recibir un mensaje destinado a este proceso
+ * (identificado por su PID) desde el buzón de respuestas del directorio.
+ *
+ * @param respuesta Puntero a la estructura donde se almacenará la respuesta
+ * recibida.
  */
 void recibirRespuestaDirectorio(struct respuesta *respuesta){
     printf("Recibiendo respuesta de directorio...\n");
@@ -114,8 +107,13 @@ void recibirRespuestaDirectorio(struct respuesta *respuesta){
 }
 
 /**
- * @brief Enviar una solicitud al mailbox de Directorio
- *  
+ * @brief Envía una solicitud al buzón del directorio y espera la respuesta.
+ *
+ * Serializa y envía una solicitud al buzón de solicitudes del directorio y
+ * luego llama a `recibirRespuestaDirectorio` para esperar la contestación.
+ *
+ * @param solicitud Puntero a la solicitud que se va a enviar.
+ * @param respuesta Puntero a la estructura donde se guardará la respuesta.
  */
 void enviarSolicitudDirectorio(struct solicitud *solicitud, struct respuesta *respuesta) {
 
@@ -188,16 +186,13 @@ void regenerarMapa() {
 }
 
 /**
- * @brief Verificar que se puede aceptar al jugador
+ * @brief Verifica si un nuevo jugador puede unirse al servidor.
  *
- * Se aceptará si el servidor tiene espacio para otro jugador
- * y en el equipo que seleccionó
+ * Comprueba si el servidor no ha alcanzado su capacidad máxima de jugadores y
+ * si el equipo específico del jugador (Raider o Guardián) no está lleno.
  *
  * @param jugador Puntero a la estructura del jugador que intenta conectarse.
- *                Se utiliza para verificar el equipo solicitado
- * (`jugador->tipo`).
- * @return Devuelve 1 si el jugador puede ser aceptado, 0 en caso contrario
- *         (servidor lleno, equipo lleno o tipo de jugador inválido).
+ * @return 1 (verdadero) si el jugador es aceptado, 0 (falso) en caso contrario.
  */
 int aceptarJugador(struct Jugador *jugador)
 {
@@ -205,7 +200,7 @@ int aceptarJugador(struct Jugador *jugador)
     {
         printf("[LOG] Rechazado: servidor lleno (%d/%d).\n", estado->cant_jugadores,
                MAX_JUGADORES);
-        return EXIT_SUCCESS;
+        return 0;
     }
 
     switch (jugador->tipo)
@@ -215,7 +210,7 @@ int aceptarJugador(struct Jugador *jugador)
         {
             printf("[LOG] Rechazado: equipo RAIDER lleno (%d/%d).\n",
                    estado->cant_raiders, max_raiders);
-            return EXIT_SUCCESS;
+            return 0;
         }
         break;
 
@@ -224,34 +219,32 @@ int aceptarJugador(struct Jugador *jugador)
         {
             printf("[LOG] Rechazado: equipo GUARDIAN lleno (%d/%d).\n",
                    estado->cant_guardianes, max_guardianes);
-            return EXIT_SUCCESS;
+            return 0;
         }
         break;
 
     default:
         printf("[LOG] Rechazado: tipo de jugador desconocido '%c'.\n",
                jugador->tipo);
-        return EXIT_SUCCESS;
+        return 0;
     }
 
     printf("[LOG] Jugador '%s' (tipo: %c) puede ser aceptado.\n", jugador->nombre,
            jugador->tipo);
-    return EXIT_FAILURE;
+    return 1;
 }
 
 /**
- * @brief Genera un jugador en la zona exterior del mapa.
+ * @brief Asigna una posición aleatoria a un nuevo jugador en el mapa.
  *
- * La función intenta encontrar una posición vacía en un anillo exterior
- * del mapa, definido como la zona entre la mitad del radio del mapa y el borde.
- * Si no encuentra ninguna posición válida en esa zona (por ejemplo, porque está
- * llena de paredes u otros jugadores), recurre a la estrategia de
- * buscar cualquier celda vacía en todo el mapa.
- * Una vez encontrada una posición, actualiza las coordenadas en la struct
- * Jugador y modifica el mapa para marcar la celda como ocupada.
+ * Busca una celda vacía (`VACIO`) de forma aleatoria en el mapa y asigna
+ * sus coordenadas al jugador. Luego, actualiza el mapa con el tipo del jugador.
+ * Incluye un mecanismo de reintentos para evitar bucles infinitos en mapas
+ * llenos.
  *
- * @param jugador Un puntero a la estructura del jugador que se va a 'spawnear'.
- *                La función actualizará la posición de este jugador.
+ * @param jugador Puntero a la estructura del jugador cuya posición se va a
+ * establecer.
+ * @return 0 en caso de éxito, -1 si no se pudo encontrar una posición.
  */
 void spawnearJugador(struct Jugador *jugador)
 {
@@ -301,7 +294,13 @@ void spawnearJugador(struct Jugador *jugador)
            jugador->posicion.fila, jugador->posicion.columna);
 }
 
-
+/**
+ * @brief Distribuye los tesoros en posiciones aleatorias del mapa.
+ *
+ * Coloca `max_tesoros` en celdas vacías (`VACIO`) del mapa de forma aleatoria
+ * al inicio de la partida.
+ *
+ */
 void generarTesoros() {
     int fila, columna, i = 0;
     while (estado->cant_tesoros < max_tesoros && i < MAX_TESOROS) {
@@ -320,6 +319,15 @@ void generarTesoros() {
 // =========================
 //      SETUP
 // =========================
+
+/**
+ * @brief Crea o se conecta a las colas de mensajes (buzones) necesarias para la
+ * comunicación.
+ *
+ * Obtiene los identificadores para el buzón de solicitudes de este servidor y
+ * los buzones de solicitudes y respuestas del proceso Directorio.
+ *
+ */
 void abrirMensajeria()
 {
     // Nuestros mailboxes
@@ -343,6 +351,14 @@ void abrirMensajeria()
     
 }
 
+/**
+ * @brief Crea e inicializa los segmentos de memoria compartida para el mapa y
+ * el estado.
+ *
+ * Abre dos segmentos de memoria compartida con nombres únicos, los dimensiona
+ * y los mapea en el espacio de direcciones del proceso. 
+ *
+ */
 void abrirMemoria()
 {
 
@@ -373,6 +389,14 @@ void abrirMemoria()
         fatal("Error mapeando shm estado");
 }
 
+/**
+ * @brief Carga la configuración del servidor desde un archivo de propiedades.
+ *
+ * Lee un archivo de texto con el formato `clave=valor` y establece los
+ * parámetros `max_guardianes`, `max_raiders` y `max_tesoros`
+ *
+ * @param ruta La ruta al archivo de configuración (ej: "config.properties").
+ */
 void cargarArchivoConfiguracion(char ruta[])
 {
     FILE *archivo = fopen(ruta, "r");
@@ -411,6 +435,14 @@ void cargarArchivoConfiguracion(char ruta[])
     fclose(archivo);
 }
 
+/**
+ * @brief Carga la plantilla del mapa desde un archivo de texto.
+ *
+ * Lee un archivo de texto carácter por carácter y lo vuelca en la matriz
+ * del mapa en la memoria compartida.
+ *
+ * @param ruta La ruta al archivo del mapa (ej: "mapa.txt").
+ */
 void cargarArchivoMapa(char ruta[])
 {
     FILE *archivo = fopen(ruta, "r");
@@ -440,7 +472,15 @@ void cargarArchivoMapa(char ruta[])
     fclose(archivo);
 }
 
-
+/**
+ * @brief Libera todos los recursos IPC (memoria compartida, buzones) y memoria
+ * dinámica.
+ *
+ * Realiza una limpieza ordenada: desvincula la memoria compartida, desmapea
+ * los segmentos, cierra los descriptores de archivo, elimina el buzón de
+ * mensajes y libera la memoria de la estructura del servidor.
+ *
+ */
 void finish()
 {
     if (shm_unlink(memoria_mapa_nombre) < 0)
@@ -460,6 +500,15 @@ void finish()
     exit(EXIT_SUCCESS);
 }
 
+/**
+ * @brief Orquesta la secuencia de inicialización completa del servidor.
+ *
+ * Llama en orden a todas las funciones `inicializar*` y `registrarEnDirectorio`
+ * para poner en marcha el servidor. También imprime un banner de inicio.
+ *
+ * @param rutaMapa Ruta al archivo del mapa.
+ * @param rutaConfig Ruta al archivo de configuración.
+ */
 void setup(char rutaMapa[], char rutaConfig[])
 {
     // El orden es importante aqui
@@ -524,6 +573,17 @@ void setup(char rutaMapa[], char rutaConfig[])
 //      MAIN
 // =========================
 
+/**
+ * @brief Punto de entrada principal y bucle de atención de solicitudes.
+ *
+ * Valida los argumentos de línea de comandos, inicializa el servidor
+ * y entra en un bucle infinito para recibir y procesar solicitudes de clientes
+ * de forma bloqueante.
+ *
+ * @param argc Número de argumentos de línea de comandos.
+ * @param argv Vector de argumentos de línea de comandos.
+ * @return 0 en caso de éxito, 1 en caso de error.
+ */
 int main(int argc, char *argv[])
 {
     if (argc < 3){
@@ -573,7 +633,7 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
-// 
+
 void recibirSolicitudes() {
     while (1) {
         printf("Esperando solicitudes...\n");
