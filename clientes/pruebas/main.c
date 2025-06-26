@@ -9,14 +9,29 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include "../../catacumbas/catacumbas.h" // Para FILAS y COLUMNAS
 
 #define MENU_PRINCIPAL_ITEMS 5
 #define MENU_WIDTH 50
+
+typedef struct {
+    char nombre[64];
+    char direccion[128];   // Dirección de la memoria compartida
+    int mailbox;          // Mailbox del mapa
+    int players_connected;
+    int max_players;
+} Map;
 
 // Variables globales para rol y mapa seleccionados
 char selected_role[50] = "NO SELECCIONADO";
 char selected_map[50] = "NO SELECCIONADO";
 char player_character = 'J'; // Valor por defecto para el personaje del jugador
+char selected_shm_path[128];
+int selected_mailbox;
+int jugador_x = 1, jugador_y = 1; // Valores por defecto
 
 // Funciones para establecer rol y mapa
 void set_game_role(const char *role)
@@ -40,12 +55,14 @@ void set_game_map(const char *map)
 // Declaraciones de funciones externas
 extern int mostrar_base(char player_character);
 extern int mostrar_menu_rol();
-extern int mostrar_seleccion_mapa();
+extern int mostrar_seleccion_mapa(Map *maps, int num_maps);
 
 // Declaraciones de funciones internas
 int ejecutar_base();
 int ejecutar_seleccion_mapa();
 int ejecutar_seleccion_rol();
+int mostrar_listado_mapas_y_seleccionar();
+void mostrar_mapa_real(); // <-- AGREGA ESTA LÍNEA
 
 void mostrar_catacumbas_formateadas(char *datos);
 
@@ -56,11 +73,9 @@ typedef struct
     int (*funcion)();
 } OpcionMenuPrincipal;
 
-// Función para buscar catacumbas disponibles
+// Función para buscar catacumbas disponibles y mostrar menú de selección
 int buscar_catacumbas_disponibles()
 {
- 
-    
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
 
@@ -72,7 +87,6 @@ int buscar_catacumbas_disponibles()
         printf("   🚀 ./server &\n\n");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        
         // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
@@ -87,8 +101,7 @@ int buscar_catacumbas_disponibles()
             init_pair(4, COLOR_CYAN, COLOR_BLACK);
             init_pair(5, COLOR_GREEN, COLOR_BLACK);
         }
-        
-        return 0; // <-- CAMBIAR DE -1 A 0 para no cerrar el programa
+        return 0;
     }
 
     struct solicitud msg;
@@ -105,7 +118,6 @@ int buscar_catacumbas_disponibles()
         perror("Error enviando solicitud");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        
         // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
@@ -120,8 +132,7 @@ int buscar_catacumbas_disponibles()
             init_pair(4, COLOR_CYAN, COLOR_BLACK);
             init_pair(5, COLOR_GREEN, COLOR_BLACK);
         }
-        
-        return 0; // <-- CAMBIAR DE -1 A 0
+        return 0;
     }
 
     // Recibir respuesta
@@ -130,7 +141,6 @@ int buscar_catacumbas_disponibles()
         perror("Error recibiendo respuesta");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        
         // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
@@ -145,14 +155,68 @@ int buscar_catacumbas_disponibles()
             init_pair(4, COLOR_CYAN, COLOR_BLACK);
             init_pair(5, COLOR_GREEN, COLOR_BLACK);
         }
-        
-        return 0; // <-- CAMBIAR DE -1 A 0
+        return 0;
     }
 
     if (resp.codigo == RESP_OK)
     {
         // Parsear y mostrar catacumbas disponibles
-        mostrar_catacumbas_formateadas(resp.datos);
+        Map maps[20];
+        int num_maps = 0;
+
+        char *saveptr1, *saveptr2;
+        char *catacumba = strtok_r(resp.datos, ";", &saveptr1);
+        while (catacumba && num_maps < 20) {
+            char *nombre = strtok_r(catacumba, "|", &saveptr2);
+            char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
+            strtok_r(NULL, "|", &saveptr2); // propCatacumba (puedes ignorar)
+            char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
+            char *cantJug = strtok_r(NULL, "|", &saveptr2);
+            char *maxJug = strtok_r(NULL, "|", &saveptr2);
+
+            if (nombre && direccion && mailbox_str && cantJug && maxJug) {
+                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre)-1);
+                maps[num_maps].nombre[sizeof(maps[num_maps].nombre)-1] = '\0';
+                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion)-1);
+                maps[num_maps].direccion[sizeof(maps[num_maps].direccion)-1] = '\0';
+                maps[num_maps].mailbox = atoi(mailbox_str);
+                maps[num_maps].players_connected = atoi(cantJug);
+                maps[num_maps].max_players = atoi(maxJug);
+                num_maps++;
+            }
+            catacumba = strtok_r(NULL, ";", &saveptr1);
+        }
+
+        if (num_maps == 0) {
+            endwin();
+            printf("ℹ️  No hay catacumbas disponibles.\n");
+            printf("Presiona Enter para continuar...");
+            getchar();
+            initscr();
+            cbreak();
+            noecho();
+            keypad(stdscr, TRUE);
+            curs_set(0);
+            if (has_colors()) {
+                start_color();
+                init_pair(1, COLOR_BLACK, COLOR_WHITE);
+                init_pair(2, COLOR_WHITE, COLOR_BLACK);
+                init_pair(3, COLOR_YELLOW, COLOR_BLACK);
+                init_pair(4, COLOR_CYAN, COLOR_BLACK);
+                init_pair(5, COLOR_GREEN, COLOR_BLACK);
+            }
+            return 0;
+        }
+
+        int seleccionado = mostrar_seleccion_mapa(maps, num_maps);
+        if (seleccionado >= 0 && seleccionado < num_maps) {
+            set_game_map(maps[seleccionado].nombre);
+            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path)-1);
+            selected_shm_path[sizeof(selected_shm_path)-1] = '\0';
+            selected_mailbox = maps[seleccionado].mailbox;
+
+            mostrar_mapa_real(); // <-- Muestra el mapa real
+        }
         return 0;
     }
     else
@@ -160,7 +224,6 @@ int buscar_catacumbas_disponibles()
         printf("❌ Error: %s\n", resp.datos);
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        
         // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
@@ -175,8 +238,7 @@ int buscar_catacumbas_disponibles()
             init_pair(4, COLOR_CYAN, COLOR_BLACK);
             init_pair(5, COLOR_GREEN, COLOR_BLACK);
         }
-        
-        return 0; // <-- CAMBIAR DE -1 A 0
+        return 0;
     }
 }
 
@@ -455,26 +517,7 @@ int ejecutar_seleccion_rol()
 
 int ejecutar_seleccion_mapa()
 {
-    int mapa_id = mostrar_seleccion_mapa();
-
-    // Establecer el mapa basado en el resultado
-    switch (mapa_id)
-    {
-    case 0:
-        set_game_map("CASTILLO OSCURO");
-        break;
-    case 1:
-        set_game_map("BOSQUE ENCANTADO");
-        break;
-    case 2:
-        set_game_map("CIUDAD PERDIDA");
-        break;
-    default:
-        set_game_map("MAPA DESCONOCIDO");
-        break;
-    }
-
-    return mapa_id;
+    return mostrar_listado_mapas_y_seleccionar();
 }
 
 int ejecutar_base()
@@ -488,6 +531,161 @@ int ejecutar_base()
 }
 void setPlayChar(char c) {
     player_character = c;
+}
+int mostrar_listado_mapas_y_seleccionar() {
+    int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
+    int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
+
+    if (mailbox_solicitudes == -1 || mailbox_respuestas == -1) {
+        endwin();
+        printf("❌ Directorio no disponible\n");
+        printf("Presiona Enter para regresar al menú principal...");
+        getchar();
+        initscr();
+        return 0;
+    }
+
+    struct solicitud msg;
+    struct respuesta resp;
+    pid_t mi_pid = getpid();
+
+    msg.mtype = mi_pid;
+    msg.tipo = OP_LISTAR;
+    msg.texto[0] = '\0';
+
+    if (msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
+        endwin();
+        perror("Error enviando solicitud");
+        printf("Presiona Enter para regresar al menú principal...");
+        getchar();
+        initscr();
+        return 0;
+    }
+
+    if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1) {
+        endwin();
+        perror("Error recibiendo respuesta");
+        printf("Presiona Enter para regresar al menú principal...");
+        getchar();
+        initscr();
+        return 0;
+    }
+
+    if (resp.codigo == RESP_OK) {
+        Map maps[20];
+        int num_maps = 0;
+        char *saveptr1, *saveptr2;
+        char *catacumba = strtok_r(resp.datos, ";", &saveptr1);
+        while (catacumba && num_maps < 20) {
+            char *nombre = strtok_r(catacumba, "|", &saveptr2);
+            char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
+            strtok_r(NULL, "|", &saveptr2); // propCatacumba (puedes ignorar)
+            char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
+            char *cantJug = strtok_r(NULL, "|", &saveptr2);
+            char *maxJug = strtok_r(NULL, "|", &saveptr2);
+
+            if (nombre && direccion && mailbox_str && cantJug && maxJug) {
+                strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre)-1);
+                maps[num_maps].nombre[sizeof(maps[num_maps].nombre)-1] = '\0';
+                strncpy(maps[num_maps].direccion, direccion, sizeof(maps[num_maps].direccion)-1);
+                maps[num_maps].direccion[sizeof(maps[num_maps].direccion)-1] = '\0';
+                maps[num_maps].mailbox = atoi(mailbox_str);
+                maps[num_maps].players_connected = atoi(cantJug);
+                maps[num_maps].max_players = atoi(maxJug);
+                num_maps++;
+            }
+            catacumba = strtok_r(NULL, ";", &saveptr1);
+        }
+
+        if (num_maps == 0) {
+            endwin();
+            printf("ℹ️  No hay catacumbas disponibles.\n");
+            printf("Presiona Enter para continuar...");
+            getchar();
+            initscr();
+            return 0;
+        }
+
+        int seleccionado = mostrar_seleccion_mapa(maps, num_maps);
+        if (seleccionado >= 0 && seleccionado < num_maps) {
+            set_game_map(maps[seleccionado].nombre);
+            strncpy(selected_shm_path, maps[seleccionado].direccion, sizeof(selected_shm_path)-1);
+            selected_shm_path[sizeof(selected_shm_path)-1] = '\0';
+            selected_mailbox = maps[seleccionado].mailbox;
+        }
+        return seleccionado;
+    } else {
+        endwin();
+        printf("❌ Error: %s\n", resp.datos);
+        printf("Presiona Enter para regresar al menú principal...");
+        getchar();
+        initscr();
+        return 0;
+    }
+}
+void mostrar_mapa_real() {
+    int fd = shm_open(selected_shm_path, O_RDONLY, 0666);
+    if (fd == -1) {
+        endwin();
+        perror("Error abriendo memoria compartida del mapa");
+        printf("Presiona Enter para continuar...");
+        getchar();
+        initscr();
+        return;
+    }
+
+    size_t size = FILAS * COLUMNAS;
+    char *mapa = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (mapa == MAP_FAILED) {
+        endwin();
+        perror("Error mapeando memoria compartida del mapa");
+        printf("Presiona Enter para continuar...");
+        getchar();
+        initscr();
+        close(fd);
+        return;
+    }
+
+    // Buscar posición inicial del jugador
+    int jugador_x = 1, jugador_y = 1;
+    for (int y = 0; y < FILAS; y++) {
+        for (int x = 0; x < COLUMNAS; x++) {
+            if (mapa[y * COLUMNAS + x] == ' ') {
+                jugador_y = y;
+                jugador_x = x;
+                goto encontrado;
+            }
+        }
+    }
+encontrado:;
+
+    // Bucle de movimiento
+    int ch;
+    keypad(stdscr, TRUE);
+    curs_set(0);
+    while ((ch = getch()) != 'q') {
+        int new_x = jugador_x, new_y = jugador_y;
+        if (ch == KEY_UP) new_y--;
+        if (ch == KEY_DOWN) new_y++;
+        if (ch == KEY_LEFT) new_x--;
+        if (ch == KEY_RIGHT) new_x++;
+        if (new_y >= 0 && new_y < FILAS && new_x >= 0 && new_x < COLUMNAS &&
+            mapa[new_y * COLUMNAS + new_x] == ' ') {
+            jugador_x = new_x;
+            jugador_y = new_y;
+        }
+        clear();
+        for (int y = 0; y < FILAS; y++) {
+            for (int x = 0; x < COLUMNAS; x++) {
+                mvaddch(y, x, mapa[y * COLUMNAS + x]);
+            }
+        }
+        mvaddch(jugador_y, jugador_x, player_character);
+        refresh();
+    }
+
+    munmap(mapa, size);
+    close(fd);
 }
 
 

@@ -1,39 +1,32 @@
 #include <ncurses.h>
 
-#define NUM_MAPS 3
-
 typedef struct {
-    char name[20];
+    char name[64];
+    char shm_path[128];   // Dirección de la memoria compartida
+    int mailbox;          // Mailbox del mapa (si lo necesitas)
     int players_connected;
     int max_players;
 } Map;
 
-// Lista de mapas disponibles
-Map maps[NUM_MAPS] = {
-    {"Castillo Oscuro", 3, 5},
-    {"Bosque Encantado", 1, 4},
-    {"Ciudad Perdida", 4, 6}
-};
-
-//int current_selection = 0;
-
 static int current_selection = 0;
 
-void draw_map_selection() {
+// Ahora la función recibe el array de mapas y su cantidad
+void draw_map_selection(Map *maps, int num_maps) {
     clear();
     
     attron(COLOR_PAIR(3)); // Título en amarillo
     mvprintw(0, 5, "Seleccione un mapa:");
     attroff(COLOR_PAIR(3));
 
-    for (int i = 0; i < NUM_MAPS; i++) {
+    for (int i = 0; i < num_maps; i++) {
         if (i == current_selection) {
             attron(A_REVERSE | COLOR_PAIR(1)); // Resaltar mapa seleccionado con color azul
         } else {
             attron(COLOR_PAIR(2)); // Color estándar para los mapas
         }
+       //mvprintw(2 + (i * 2), 2, "%s - Jugadores: %d/%d", maps[i].name, maps[i].players_connected, maps[i].max_players);
 
-        mvprintw(2 + (i * 2), 2, "%s - Jugadores: %d/%d", maps[i].name, maps[i].players_connected, maps[i].max_players);
+        mvprintw(2 + (i * 2), 2, "%s - Jugadores: %d/%d - SHM: %s", maps[i].name, maps[i].players_connected, maps[i].max_players, maps[i].shm_path);
         
         attroff(A_REVERSE);
         attroff(COLOR_PAIR(1));
@@ -46,21 +39,21 @@ void draw_map_selection() {
     }
 
     attron(COLOR_PAIR(3)); // Instrucciones en amarillo
-    mvprintw(NUM_MAPS * 2 + 3, 2, "Usa las flechas arriba-abajo para cambiar. Presiona Enter para seleccionar.");
+    mvprintw(num_maps * 2 + 3, 2, "Usa las flechas arriba-abajo para cambiar. Presiona Enter para seleccionar.");
     attroff(COLOR_PAIR(3));
 
     refresh();
 }
 
-int mostrar_seleccion_mapa() {
-
-    // Definir colores
+// También recibe el array y su cantidad
+int mostrar_seleccion_mapa(Map *maps, int num_maps) {
     init_pair(1, COLOR_BLUE, COLOR_BLACK);  // Color azul para mapa seleccionado
     init_pair(2, COLOR_WHITE, COLOR_BLACK); // Color blanco para mapas no seleccionados
     init_pair(3, COLOR_YELLOW, COLOR_BLACK); // Color amarillo para el título e instrucciones
     
     int ch;
-    draw_map_selection();
+    current_selection = 0;
+    draw_map_selection(maps, num_maps);
 
     while ((ch = getch()) != '\n') {
         switch (ch) {
@@ -68,10 +61,10 @@ int mostrar_seleccion_mapa() {
                 if (current_selection > 0) current_selection--;
                 break;
             case KEY_DOWN:
-                if (current_selection < NUM_MAPS - 1) current_selection++;
+                if (current_selection < num_maps - 1) current_selection++;
                 break;
         }
-        draw_map_selection();
+        draw_map_selection(maps, num_maps);
     }
 
     clear();
