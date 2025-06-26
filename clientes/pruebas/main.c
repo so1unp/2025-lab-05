@@ -22,23 +22,22 @@
 typedef struct
 {
     char nombre[64];
-    char direccion[128]; // Dirección de la memoria compartida
-    int mailbox;         // Mailbox del mapa
+    char direccion[128];
+    int mailbox;
     int players_connected;
     int max_players;
 } Map;
 
-// Variables globales para rol y mapa seleccionados
-int tipo_jugador = JUGADOR_EXPLORADOR;     // o JUGADOR_GUARDIAN según selección
-char nombre_catacumba[128] = "catacumba1"; // ejemplo
+int tipo_jugador = JUGADOR_EXPLORADOR;
+char nombre_catacumba[128] = "catacumba1";
 char selected_role[50] = "NO SELECCIONADO";
 char selected_map[50] = "NO SELECCIONADO";
-char player_character = 'E'; // Valor por defecto para el personaje del jugador
+char player_character = 'E';
 char selected_shm_path[128];
 int selected_mailbox;
-int jugador_x = 1, jugador_y = 1; // Valores por defecto
+int jugador_x = 1, jugador_y = 1;
+key_t key_respuestas_global = 0;
 
-// Funciones para establecer rol y mapa
 void set_game_role(const char *role)
 {
     if (role != NULL)
@@ -57,20 +56,16 @@ void set_game_map(const char *map)
     }
 }
 
-// Declaraciones de funciones externas
 extern int mostrar_base(char player_character);
 extern int mostrar_menu_rol();
 extern int mostrar_seleccion_mapa(Map *maps, int num_maps);
 
-// Declaraciones de funciones internas
 int ejecutar_base();
 int ejecutar_seleccion_mapa();
 int ejecutar_seleccion_rol();
 int mostrar_listado_mapas_y_seleccionar();
-void mostrar_mapa_real(); // <-- AGREGA ESTA LÍNEA
+void mostrar_mapa_real();
 void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar);
-
-
 void mostrar_catacumbas_formateadas(char *datos);
 
 typedef struct
@@ -80,7 +75,111 @@ typedef struct
     int (*funcion)();
 } OpcionMenuPrincipal;
 
-// Función para buscar catacumbas disponibles y mostrar menú de selección
+int conectar_al_servidor() {
+    key_t key_respuestas = ftok("/tmp", getpid());
+    int mailbox_respuestas = msgget(key_respuestas, IPC_CREAT | 0666);
+    key_respuestas_global = key_respuestas;
+    
+    if (mailbox_respuestas == -1) {
+        perror("Error creando mailbox de respuestas");
+        return -1;
+    }
+    
+    struct SolicitudServidor solicitud;
+    solicitud.mtype = getpid();
+    solicitud.codigo = CONEXION;
+    solicitud.clave_mailbox_respuestas = key_respuestas;
+    solicitud.fila = 0;
+    solicitud.columna = 0;
+    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
+    
+    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
+    if (mailbox_solicitudes_id == -1) {
+        perror("Error conectando al mailbox del servidor");
+        return -1;
+    }
+    
+    if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
+        perror("Error enviando solicitud de conexión");
+        return -1;
+    }
+    
+    struct RespuestaServidor respuesta;
+    if (msgrcv(mailbox_respuestas, &respuesta, sizeof(respuesta) - sizeof(long), 
+               getpid(), 0) == -1) {
+        perror("Error recibiendo respuesta de conexión");
+        return -1;
+    }
+    
+    if (respuesta.codigo != S_OK) {
+        mvprintw(FILAS + 4, 0, "Error del servidor: %s", respuesta.mensaje);
+        return -1;
+    }
+    
+    mvprintw(FILAS + 4, 0, "Conectado: %s", respuesta.mensaje);
+    refresh();
+    
+    return 0;
+}
+
+void desconectar_del_servidor() {
+    struct SolicitudServidor solicitud;
+    solicitud.mtype = getpid();
+    solicitud.codigo = DESCONEXION;
+    solicitud.clave_mailbox_respuestas = key_respuestas_global;
+    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
+    
+    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
+    if (mailbox_solicitudes_id != -1) {
+        msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT);
+    }
+    
+    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
+    if (mailbox_respuestas != -1) {
+        msgctl(mailbox_respuestas, IPC_RMID, NULL);
+    }
+    
+    mvprintw(FILAS + 4, 0, "Desconectado del servidor");
+    refresh();
+}
+
+void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id)
+{
+    struct SolicitudServidor solicitud;
+    solicitud.mtype = getpid();
+    solicitud.codigo = MOVIMIENTO;
+    solicitud.clave_mailbox_respuestas = key_respuestas_global;
+    solicitud.fila = jugador_y;
+    solicitud.columna = jugador_x;
+    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
+    
+    if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT) == -1) {
+        perror("Error enviando movimiento");
+    }
+    
+    struct RespuestaServidor respuesta;
+    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
+    if (msgrcv(mailbox_respuestas, &respuesta, sizeof(respuesta) - sizeof(long), 
+               getpid(), IPC_NOWAIT) != -1) {
+        
+        switch(respuesta.codigo) {
+            case S_OK:
+                mvprintw(FILAS + 5, 0, "Movimiento OK");
+                break;
+            case ERROR:
+                mvprintw(FILAS + 5, 0, "Error: %s", respuesta.mensaje);
+                break;
+            case SIN_TESOROS:
+                mvprintw(FILAS + 5, 0, "Victoria! Todos los tesoros recolectados");
+                break;
+            case SIN_RAIDERS:
+                mvprintw(FILAS + 5, 0, "Victoria! Todos los raiders capturados");
+                break;
+        }
+        refresh();
+    }
+}
+
 int buscar_catacumbas_disponibles()
 {
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
@@ -88,13 +187,12 @@ int buscar_catacumbas_disponibles()
 
     if (mailbox_solicitudes == -1 || mailbox_respuestas == -1)
     {
-        printf("❌ Directorio no disponible\n");
-        printf("   ℹ️  Asegúrate de que el servidor de directorio esté ejecutándose:\n");
-        printf("   📁 cd ../../directorio\n");
-        printf("   🚀 ./server &\n\n");
+        printf("Directorio no disponible\n");
+        printf("Asegúrate de que el servidor de directorio esté ejecutándose:\n");
+        printf("cd ../../directorio\n");
+        printf("./server &\n\n");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
         noecho();
@@ -103,11 +201,11 @@ int buscar_catacumbas_disponibles()
         if (has_colors())
         {
             start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+            init_pair(2, COLOR_RED, COLOR_YELLOW);
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
         }
         return 0;
     }
@@ -116,7 +214,6 @@ int buscar_catacumbas_disponibles()
     struct respuesta resp;
     pid_t mi_pid = getpid();
 
-    // Solicitar lista de catacumbas
     msg.mtype = mi_pid;
     msg.tipo = OP_LISTAR;
     msg.texto[0] = '\0';
@@ -126,7 +223,6 @@ int buscar_catacumbas_disponibles()
         perror("Error enviando solicitud");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
         noecho();
@@ -135,22 +231,20 @@ int buscar_catacumbas_disponibles()
         if (has_colors())
         {
             start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+            init_pair(2, COLOR_RED, COLOR_YELLOW);
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
         }
         return 0;
     }
 
-    // Recibir respuesta
     if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1)
     {
         perror("Error recibiendo respuesta");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
         noecho();
@@ -159,18 +253,17 @@ int buscar_catacumbas_disponibles()
         if (has_colors())
         {
             start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+            init_pair(2, COLOR_RED, COLOR_YELLOW);
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
         }
         return 0;
     }
 
     if (resp.codigo == RESP_OK)
     {
-        // Parsear y mostrar catacumbas disponibles
         Map maps[20];
         int num_maps = 0;
 
@@ -179,8 +272,8 @@ int buscar_catacumbas_disponibles()
         while (catacumba && num_maps < 20)
         {
             char *nombre = strtok_r(catacumba, "|", &saveptr2);
-            char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
-            strtok_r(NULL, "|", &saveptr2);                   // propCatacumba (puedes ignorar)
+            char *direccion = strtok_r(NULL, "|", &saveptr2);
+            strtok_r(NULL, "|", &saveptr2);
             char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
             char *cantJug = strtok_r(NULL, "|", &saveptr2);
             char *maxJug = strtok_r(NULL, "|", &saveptr2);
@@ -202,7 +295,7 @@ int buscar_catacumbas_disponibles()
         if (num_maps == 0)
         {
             endwin();
-            printf("ℹ️  No hay catacumbas disponibles.\n");
+            printf("No hay catacumbas disponibles.\n");
             printf("Presiona Enter para continuar...");
             getchar();
             initscr();
@@ -213,11 +306,11 @@ int buscar_catacumbas_disponibles()
             if (has_colors())
             {
                 start_color();
-                init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-                init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-                init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-                init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-                init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+                init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+                init_pair(2, COLOR_RED, COLOR_YELLOW);
+                init_pair(3, COLOR_BLACK, COLOR_GREEN);
+                init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+                init_pair(5, COLOR_YELLOW, COLOR_BLACK);
             }
             return 0;
         }
@@ -230,16 +323,15 @@ int buscar_catacumbas_disponibles()
             selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
             selected_mailbox = maps[seleccionado].mailbox;
 
-            mostrar_mapa_real(); // <-- Muestra el mapa real
+            mostrar_mapa_real();
         }
         return 0;
     }
     else
     {
-        printf("❌ Error: %s\n", resp.datos);
+        printf("Error: %s\n", resp.datos);
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
-        // Reinstalar ncurses antes de regresar
         initscr();
         cbreak();
         noecho();
@@ -248,49 +340,44 @@ int buscar_catacumbas_disponibles()
         if (has_colors())
         {
             start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-            init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+            init_pair(2, COLOR_RED, COLOR_YELLOW);
+            init_pair(3, COLOR_BLACK, COLOR_GREEN);
+            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
         }
         return 0;
     }
 }
 
-// Función para mostrar catacumbas formateadas
 void mostrar_catacumbas_formateadas(char *datos)
 {
-    // Cerrar ncurses temporalmente para mostrar en consola
     endwin();
 
     if (strlen(datos) == 0)
     {
-        printf("ℹ️  No hay catacumbas disponibles.\n");
+        printf("No hay catacumbas disponibles.\n");
         printf("Presiona Enter para continuar...");
         getchar();
         return;
     }
 
-    // Si es un mensaje simple, mostrarlo directamente
     if (strchr(datos, '|') == NULL)
     {
-        printf("📝 %s\n", datos);
+        printf("%s\n", datos);
         printf("Presiona Enter para continuar...");
         getchar();
         return;
     }
 
     printf("\n--------------------------------------------------------------\n");
-    printf("|          🏰 CATACUMBAS DISPONIBLES PARA JUGAR                |\n");
+    printf("|          CATACUMBAS DISPONIBLES PARA JUGAR                |\n");
     printf("----------------------------------------------------------------\n");
 
-    // Crear una copia para strtok
     char datos_copia[MAX_DAT_RESP];
     strncpy(datos_copia, datos, MAX_DAT_RESP - 1);
     datos_copia[MAX_DAT_RESP - 1] = '\0';
 
-    // Procesar cada catacumba
     char *catacumba = strtok(datos_copia, ";");
     int index = 1;
 
@@ -307,24 +394,23 @@ void mostrar_catacumbas_formateadas(char *datos)
             int cantJug = atoi(cantJug_str);
             int maxJug = atoi(maxJug_str);
 
-            printf("\n🏛️  Catacumba #%d:\n", index++);
-            printf("   ├─ 📝 Nombre:     \"%s\"\n", nombre);
-            printf("   ├─ 📍 Dirección:  \"%s\"\n", direccion);
-            printf("   ├─ 📬 Mailbox:    \"%s\"\n", mailbox);
-            printf("   └─ 👥 Jugadores:  %d/%d", cantJug, maxJug);
+            printf("\nCatacumba #%d:\n", index++);
+            printf("   Nombre:     \"%s\"\n", nombre);
+            printf("   Dirección:  \"%s\"\n", direccion);
+            printf("   Mailbox:    \"%s\"\n", mailbox);
+            printf("   Jugadores:  %d/%d", cantJug, maxJug);
 
-            // Indicador visual del estado
             if (cantJug == 0)
             {
-                printf(" 🟢 (Vacía)\n");
+                printf(" (Vacía)\n");
             }
             else if (cantJug == maxJug)
             {
-                printf(" 🔴 (Llena)\n");
+                printf(" (Llena)\n");
             }
             else
             {
-                printf(" 🟡 (Disponible)\n");
+                printf(" (Disponible)\n");
             }
         }
 
@@ -334,7 +420,6 @@ void mostrar_catacumbas_formateadas(char *datos)
     printf("\nPresiona Enter para continuar...");
     getchar();
 
-    // Reinicializar ncurses
     initscr();
     cbreak();
     noecho();
@@ -343,11 +428,11 @@ void mostrar_catacumbas_formateadas(char *datos)
     if (has_colors())
     {
         start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+        init_pair(2, COLOR_RED, COLOR_YELLOW);
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
     }
 }
 
@@ -364,22 +449,20 @@ int mostrar_menu_principal()
     int ch;
     int max_y, max_x;
 
-    // Inicializar ncurses
     initscr();
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
     curs_set(0);
 
-    // Habilitar colores
     if (has_colors())
     {
         start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+        init_pair(2, COLOR_RED, COLOR_YELLOW);
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
     }
 
     while (1)
@@ -387,19 +470,16 @@ int mostrar_menu_principal()
         getmaxyx(stdscr, max_y, max_x);
         clear();
 
-        // Título principal
         attron(COLOR_PAIR(3));
         mvprintw(max_y / 2 - 8, (max_x - strlen("=== MENU PRINCIPAL - CATACUMBAS ===")) / 2,
                  "=== MENU PRINCIPAL - CATACUMBAS ===");
         attroff(COLOR_PAIR(3));
 
-        // Subtítulo
         attron(COLOR_PAIR(5));
         mvprintw(max_y / 2 - 6, (max_x - strlen("Selecciona una opción")) / 2,
                  "Selecciona una opción");
         attroff(COLOR_PAIR(5));
 
-        // Mostrar opciones del menú
         for (int i = 0; i < MENU_PRINCIPAL_ITEMS; i++)
         {
             int y_pos = max_y / 2 - 3 + i * 2;
@@ -411,7 +491,6 @@ int mostrar_menu_principal()
                 mvprintw(y_pos, x_pos, " > %-30s < ", opciones[i].texto);
                 attroff(COLOR_PAIR(1));
 
-                // Mostrar descripción del item seleccionado
                 if (i < MENU_PRINCIPAL_ITEMS - 1)
                 {
                     attron(COLOR_PAIR(4));
@@ -427,11 +506,9 @@ int mostrar_menu_principal()
             }
         }
 
-        // Instrucciones
         mvprintw(max_y - 4, (max_x - strlen("Usa flechas para navegar, ENTER para seleccionar, ESC para salir")) / 2,
                  "Usa flechas para navegar, ENTER para seleccionar, ESC para salir");
 
-        // Info adicional
         refresh();
 
         ch = getch();
@@ -453,13 +530,11 @@ int mostrar_menu_principal()
                 if (resultado == -1)
                 {
                     endwin();
-                    return -1; // Salir completamente
+                    return -1;
                 }
 
-                // Si regresamos del juego base, reinicializar ncurses
                 if (seleccion == 0)
-                { // Juego Base
-                    // Reinicializar ncurses completamente
+                {
                     initscr();
                     cbreak();
                     noecho();
@@ -468,31 +543,29 @@ int mostrar_menu_principal()
                     if (has_colors())
                     {
                         start_color();
-                        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-                        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-                        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-                        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-                        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+                        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+                        init_pair(2, COLOR_RED, COLOR_YELLOW);
+                        init_pair(3, COLOR_BLACK, COLOR_GREEN);
+                        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+                        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
                     }
                 }
             }
             else
             {
-                // Opción "Salir"
                 endwin();
                 return 0;
             }
             break;
         case 'q':
         case 'Q':
-        case 27: // ESC
+        case 27:
             endwin();
             return 0;
         }
     }
 }
 
-// Función principal
 int main()
 {
     printf("Iniciando Menu Principal de Catacumbas...\n");
@@ -508,25 +581,23 @@ int main()
     return 0;
 }
 
-// Implementaciones que llaman a las funciones externas
 int ejecutar_seleccion_rol()
 {
     int resultado = mostrar_menu_rol();
 
-    // Establecer el rol basado en el resultado
     switch (resultado)
     {
-    case 'E': // JUGADOR_EXPLORADOR
+    case 'E':
         set_game_role("EXPLORADOR");
-        player_character = 'E'; // carácter que se use para explorador
+        player_character = 'E';
         break;
-    case 'G': // JUGADOR_GUARDIAN
+    case 'G':
         set_game_role("GUARDIAN");
-        player_character = 'G'; // carácter que se use para guardián
+        player_character = 'G';
         break;
     default:
         set_game_role("NO SELECCIONADO");
-        player_character = 'E'; // valor por defecto
+        player_character = 'E';
         break;
     }
 
@@ -540,17 +611,18 @@ int ejecutar_seleccion_mapa()
 
 int ejecutar_base()
 {
-    // Cerrar ncurses antes de iniciar el juego base
     endwin();
     clear();
     int resultado = mostrar_base(player_character);
 
     return resultado;
 }
+
 void setPlayChar(char c)
 {
     player_character = c;
 }
+
 int mostrar_listado_mapas_y_seleccionar()
 {
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
@@ -559,7 +631,7 @@ int mostrar_listado_mapas_y_seleccionar()
     if (mailbox_solicitudes == -1 || mailbox_respuestas == -1)
     {
         endwin();
-        printf("❌ Directorio no disponible\n");
+        printf("Directorio no disponible\n");
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
         initscr();
@@ -603,8 +675,8 @@ int mostrar_listado_mapas_y_seleccionar()
         while (catacumba && num_maps < 20)
         {
             char *nombre = strtok_r(catacumba, "|", &saveptr2);
-            char *direccion = strtok_r(NULL, "|", &saveptr2); // direccion
-            strtok_r(NULL, "|", &saveptr2);                   // propCatacumba (se podria ignorar
+            char *direccion = strtok_r(NULL, "|", &saveptr2);
+            strtok_r(NULL, "|", &saveptr2);
             char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
             char *cantJug = strtok_r(NULL, "|", &saveptr2);
             char *maxJug = strtok_r(NULL, "|", &saveptr2);
@@ -626,7 +698,7 @@ int mostrar_listado_mapas_y_seleccionar()
         if (num_maps == 0)
         {
             endwin();
-            printf("ℹ️  No hay catacumbas disponibles.\n");
+            printf("No hay catacumbas disponibles.\n");
             printf("Presiona Enter para continuar...");
             getchar();
             initscr();
@@ -646,7 +718,7 @@ int mostrar_listado_mapas_y_seleccionar()
     else
     {
         endwin();
-        printf("❌ Error: %s\n", resp.datos);
+        printf("Error: %s\n", resp.datos);
         printf("Presiona Enter para regresar al menú principal...");
         getchar();
         initscr();
@@ -654,7 +726,6 @@ int mostrar_listado_mapas_y_seleccionar()
     }
 }
 
-// Inicializa la memoria compartida y retorna el puntero al mapa
 char *inicializar_memoria_mapa(int *fd, size_t *size)
 {
     *fd = shm_open(selected_shm_path, O_RDONLY, 0666);
@@ -682,7 +753,6 @@ char *inicializar_memoria_mapa(int *fd, size_t *size)
     return mapa;
 }
 
-// Busca la posición inicial del jugador en el mapa
 void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
 {
     for (int y = 0; y < FILAS; y++)
@@ -697,10 +767,8 @@ void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
             }
         }
     }
-    // Si no encuentra, deja los valores por defecto
 }
 
-// Dibuja el mapa y el jugador en pantalla
 void dibujar_mapa(const char *mapa, int jugador_x, int jugador_y, char player_character)
 {
     clear();
@@ -715,59 +783,46 @@ void dibujar_mapa(const char *mapa, int jugador_x, int jugador_y, char player_ch
     refresh();
 }
 
-// Procesa el movimiento del jugador y colisiones
 int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y)
 {
     if (destino == '#')
     {
-        // Es una pared, no moverse
         return 0;
     }
     if (destino == '$')
     {
-        // Es un tesoro, lo recoges
-        mvprintw(FILAS + 1, 0, "¡Tesoro recogido!");
+        mvprintw(FILAS + 1, 0, "Tesoro recogido!");
         refresh();
         sleep(0.2);
     }
     if (destino == 'A' || destino == 'J')
     {
-        // Colisión con otro jugador
-        mvprintw(FILAS + 1, 0, "¡Colisión con otro jugador!");
+        mvprintw(FILAS + 1, 0, "Colisión con otro jugador!");
         refresh();
         sleep(0.2);
         return 0;
     }
-    // Movimiento válido
     *jugador_x = new_x;
     *jugador_y = new_y;
     return 1;
 }
 
-// Envía el movimiento al servidor
-void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id)
-{
-    struct SolicitudServidor solicitud;
-    solicitud.mtype = getpid();
-    solicitud.codigo = MOVIMIENTO;
-    solicitud.clave_mailbox_respuestas = clave_mailbox_respuestas;
-    solicitud.fila = jugador_y;
-    solicitud.columna = jugador_x;
-    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
-    msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0);
-}
-
-// Bucle principal del juego
 void mostrar_mapa_real()
 {
-    // Inicializa colores SOLO para el mapa real
     if (has_colors()) {
         start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA); // Paredes
-        init_pair(2, COLOR_RED, COLOR_YELLOW);      // Tesoro y jugadores
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);     // Fondo/caminable
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);   // Header
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);    // Instrucciones
+        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
+        init_pair(2, COLOR_RED, COLOR_YELLOW);
+        init_pair(3, COLOR_BLACK, COLOR_GREEN);
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
+    }
+
+    if (conectar_al_servidor() != 0) {
+        mvprintw(FILAS + 3, 0, "Error: No se pudo conectar al servidor");
+        refresh();
+        getch();
+        return;
     }
 
     int fd;
@@ -776,7 +831,6 @@ void mostrar_mapa_real()
     if (!mapa)
         return;
 
-    key_t clave_mailbox_respuestas = getpid() * MAILBOX_SOLICITUDES_SUFIJO;
     int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
 
     int jugador_x = 1, jugador_y = 1;
@@ -785,91 +839,73 @@ void mostrar_mapa_real()
     int ch;
     keypad(stdscr, TRUE);
     curs_set(0);
+    timeout(100);
 
-    while ((ch = getch()) != 'q')
-    {
+    while ((ch = getch()) != 'q') {
+        if (ch == ERR) {
+            msync(mapa, FILAS * COLUMNAS, MS_ASYNC);
+            dibujar_mapa_coloreado(mapa, FILAS, COLUMNAS, jugador_x, jugador_y, player_character);
+            continue;
+        }
+
         int new_x = jugador_x, new_y = jugador_y;
-        if (ch == KEY_UP)
-            new_y--;
-        if (ch == KEY_DOWN)
-            new_y++;
-        if (ch == KEY_LEFT)
-            new_x--;
-        if (ch == KEY_RIGHT)
-            new_x++;
+        if (ch == KEY_UP) new_y--;
+        if (ch == KEY_DOWN) new_y++;
+        if (ch == KEY_LEFT) new_x--;
+        if (ch == KEY_RIGHT) new_x++;
 
-        // Control de bordes
         if (new_y < 0 || new_y >= FILAS || new_x < 0 || new_x >= COLUMNAS)
             continue;
 
         char destino = mapa[new_y * COLUMNAS + new_x];
 
-        // Procesar movimiento y colisiones
-        if (procesar_movimiento(destino, &jugador_x, &jugador_y, new_x, new_y))
-        {
-            enviar_movimiento_al_servidor(jugador_x, jugador_y, clave_mailbox_respuestas, mailbox_solicitudes_id);
+        if (procesar_movimiento(destino, &jugador_x, &jugador_y, new_x, new_y)) {
+            enviar_movimiento_al_servidor(jugador_x, jugador_y, key_respuestas_global, mailbox_solicitudes_id);
         }
 
-        // --- Aquí usas la función coloreada ---
         dibujar_mapa_coloreado(mapa, FILAS, COLUMNAS, jugador_x, jugador_y, player_character);
     }
 
+    desconectar_del_servidor();
     munmap(mapa, size);
     close(fd);
 }
 
-// Función para jugar
 void jugar()
 {
-    // Conexión al servidor
     if (conectar_servidor(nombre_catacumba, tipo_jugador) != 0)
     {
         printf("No se pudo conectar al servidor.\n");
         return;
     }
 
-    int x = 1, y = 1; // posición inicial
+    int x = 1, y = 1;
     int jugando = 1;
     while (jugando)
     {
-        // Lógica de movimiento (leer teclado, calcular new_x, new_y, etc)
-        // ...
-
-        // Enviar movimiento
         if (enviar_movimiento(x, y, tipo_jugador) == 0)
         {
             char mensaje[256];
             int codigo;
             if (recibir_respuesta(mensaje, &codigo) == 0)
             {
-                // Mostrar mensaje en pantalla
                 mvprintw(22, 0, "%s", mensaje);
                 refresh();
-                // Si el código indica fin de juego, salir del bucle
-                //el servidor nos tiene que mandar un mensaje de fin de juego, la info esta en status.h 
                 if (codigo == ST_GAME_OVER)
                     jugando = 0;
             }
         }
-        // ...redibujar mapa, actualizar posición, etc...
     }
 
     desconectar_servidor();
 }
 
-// Dibuja el mapa recibido del directorio with colores y desplazamiento
 void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar)
 {
-    // Inicializa colores SOLO una vez en tu programa principal, no aquí.
-    // Aquí solo asume que los pares ya están definidos:
-    // 1: Paredes, 2: Tesoro/Jugador, 3: Fondo, 4: Header, 5: Instrucciones
-
-    // Header fijo (opcional)
     attron(COLOR_PAIR(4));
     mvprintw(1, 2, "=== MAPA DE CATACUMBAS ===");
     attroff(COLOR_PAIR(4));
 
-    // Dibuja el mapa desplazado (como en base.c)
     for (int y = 0; y < filas; y++)
     {
         for (int x = 0; x < columnas; x++)
@@ -895,25 +931,21 @@ void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugad
             }
             else if (c == 'E' || c == 'A' || c == 'J' || c == CELDA_EXPLORADOR || c == CELDA_GUARDIAN)
             {
-                // Jugadores (puedes usar otro color si quieres distinguirlos)
                 attron(COLOR_PAIR(2) | A_BOLD);
                 mvaddch(y + 4, x + 2, c);
                 attroff(COLOR_PAIR(2) | A_BOLD);
             }
             else
             {
-                // Otros caracteres
                 mvaddch(y + 4, x + 2, c);
             }
         }
     }
 
-    // Dibuja TU jugador (por encima, para que se vea siempre)
     attron(COLOR_PAIR(2) | A_BOLD);
     mvaddch(jugador_y + 4, jugador_x + 2, playerChar);
     attroff(COLOR_PAIR(2) | A_BOLD);
 
-    // Instrucciones
     attron(COLOR_PAIR(5));
     mvprintw(filas + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     attroff(COLOR_PAIR(5));
