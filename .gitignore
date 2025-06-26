@@ -65,6 +65,11 @@ dkms.conf
 
 # Binarios de los ejercicios
 catacumbas/server
+catacumbas/clienteCaptura
+catacumbas/cliente-epullan
+catacumbas/cliente-fabian
+catacumbas/cliente-cefe
+
 directorio/server
 directorio/clienteD
 directorio/catacumbas_persistidas.dat
