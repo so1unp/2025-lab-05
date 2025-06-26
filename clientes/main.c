@@ -14,6 +14,10 @@
 #include <fcntl.h>
 #include "../catacumbas/catacumbas.h"
 #include "status.h"
+#include "status.h"
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <string.h>
 
 #define MENU_PRINCIPAL_ITEMS 5
 #define MENU_WIDTH 50
@@ -60,6 +64,8 @@ void set_game_map(const char *map)
 extern int mostrar_base(char player_character);
 extern int mostrar_menu_rol();
 extern int mostrar_seleccion_mapa(Map *maps, int num_maps);
+
+void notificar_evento_juego(int code, const char *texto);
 
 int ejecutar_base();
 int ejecutar_seleccion_mapa();
@@ -779,13 +785,39 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     }
     if (destino == '$')
     {
-        mvprintw(FILAS + 1, 0, "Tesoro recogido!");
+        if (player_character == 'E') {
+            mvprintw(FILAS + 1, 0, "Tesoro recogido!");
+            refresh();
+            sleep(0.2);
+            // Notificar al servidor que se encontró un tesoro
+            notificar_evento_juego(ST_TREASURE_FOUND, "¡Tesoro encontrado!");
+        } else {
+            mvprintw(FILAS + 1, 0, "¡Solo los exploradores pueden recoger tesoros!");
+            refresh();
+            sleep(0.5);
+            return 0; // Bloquea el movimiento del guardián sobre el tesoro
+        }
+    }
+    // Lógica de colisión entre jugadores
+    if ((player_character == 'G' && destino == 'E')) {
+        // Guardián captura a raider
+        mvprintw(FILAS + 1, 0, "¡Has capturado a un raider!");
         refresh();
         sleep(0.2);
-    }
-    if (destino == 'A' || destino == 'J')
-    {
-        mvprintw(FILAS + 1, 0, "Colisión con otro jugador!");
+        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Guardian ha atrapado a un raider!");
+        *jugador_x = new_x;
+        *jugador_y = new_y;
+        return 1; // Permite el movimiento del guardián
+    } else if (player_character == 'E' && destino == 'G') {
+        // Raider es capturado por guardián
+        mvprintw(FILAS + 1, 0, "¡Has sido atrapado por un guardián!");
+        refresh();
+        sleep(0.2);
+        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Has sido atrapado!");
+        return 0; // Bloquea el movimiento del raider
+    } else if ((player_character == 'E' && destino == 'E') || (player_character == 'G' && destino == 'G')) {
+        // Colisión entre jugadores del mismo tipo
+        mvprintw(FILAS + 1, 0, "Colisión con otro jugador del mismo tipo!");
         refresh();
         sleep(0.2);
         return 0;
@@ -914,4 +946,15 @@ void dibujar_mapa_coloreado()
     attroff(COLOR_PAIR(5));
 
     refresh();
+}
+
+
+void notificar_evento_juego(int code, const char *texto) {
+    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
+    struct status_msg msg;
+    msg.mtype = TYPE_GAME_EVENT;
+    msg.code = code;
+    strncpy(msg.text, texto, MAX_MSG-1);
+    msg.text[MAX_MSG-1] = '\0';
+    msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
 }

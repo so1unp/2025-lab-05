@@ -11,6 +11,7 @@
 #include "catacumbas.h"
 #include "../directorio/directorio.h"
 #include <signal.h>
+#include "../clientes/status.h"
 #define _GNU_SOURCE
 
 
@@ -847,4 +848,25 @@ void imprimirTesoros() {
             tesoros[i].posicion.fila,
             tesoros[i].posicion.columna);
     }
+}
+
+void *hilo_eventos(void *arg) {
+    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
+    struct status_msg msg;
+    while (1) {
+        if (msgrcv(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0, 0) > 0) {
+            switch (msg.code) {
+                case ST_TREASURE_FOUND:
+                    printf("Evento: %s\n", msg.text);
+                    // Aquí actualiza el mapa, elimina el tesoro, suma puntaje, etc.
+                    break;
+                case ST_PLAYER_CAUGHT:
+                    printf("Evento: %s\n", msg.text);
+                    // Marca jugador como atrapado, elimina del mapa, etc.
+                    break;
+                // Otros eventos...
+            }
+        }
+    }
+    return NULL;
 }
