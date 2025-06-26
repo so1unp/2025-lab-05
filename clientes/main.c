@@ -3,9 +3,8 @@
 #include <ncurses.h>
 #include <unistd.h>
 #include <string.h>
-#include "../juego_constantes.h"
-#include "jugador.h"
-#include "../../directorio/directorio.h"
+#include "juego_constantes.h"
+#include "../directorio/directorio.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -13,7 +12,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "../../catacumbas/catacumbas.h"
+#include "../catacumbas/catacumbas.h"
 #include "status.h"
 
 #define MENU_PRINCIPAL_ITEMS 5
@@ -37,6 +36,8 @@ char selected_shm_path[128];
 int selected_mailbox;
 int jugador_x = 1, jugador_y = 1;
 key_t key_respuestas_global = 0;
+char *mapa = NULL;
+int fd = -1;
 
 void set_game_role(const char *role)
 {
@@ -64,8 +65,8 @@ int ejecutar_base();
 int ejecutar_seleccion_mapa();
 int ejecutar_seleccion_rol();
 int mostrar_listado_mapas_y_seleccionar();
-void mostrar_mapa_real();
-void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar);
+void jugar();
+void dibujar_mapa_coloreado();
 void mostrar_catacumbas_formateadas(char *datos);
 
 typedef struct
@@ -323,7 +324,7 @@ int buscar_catacumbas_disponibles()
             selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
             selected_mailbox = maps[seleccionado].mailbox;
 
-            mostrar_mapa_real();
+            jugar();
         }
         return 0;
     }
@@ -726,20 +727,20 @@ int mostrar_listado_mapas_y_seleccionar()
     }
 }
 
-char *inicializar_memoria_mapa(int *fd, size_t *size)
+int inicializar_memoria_mapa()
 {
-    *fd = shm_open(selected_shm_path, O_RDONLY, 0666);
-    if (*fd == -1)
+    fd = shm_open(selected_shm_path, O_RDONLY, 0666);
+    if (fd == -1)
     {
         endwin();
         perror("Error abriendo memoria compartida del mapa");
         printf("Presiona Enter para continuar...");
         getchar();
         initscr();
-        return NULL;
+        return -1;
     }
-    *size = FILAS * COLUMNAS;
-    char *mapa = mmap(NULL, *size, PROT_READ, MAP_SHARED, *fd, 0);
+    size_t size = FILAS * COLUMNAS;
+    mapa = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
     if (mapa == MAP_FAILED)
     {
         endwin();
@@ -747,13 +748,14 @@ char *inicializar_memoria_mapa(int *fd, size_t *size)
         printf("Presiona Enter para continuar...");
         getchar();
         initscr();
-        close(*fd);
-        return NULL;
+        close(fd);
+        return -1;
     }
-    return mapa;
+    close(fd);
+    return 0;
 }
 
-void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
+/* void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
 {
     for (int y = 0; y < FILAS; y++)
     {
@@ -767,21 +769,7 @@ void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
             }
         }
     }
-}
-
-void dibujar_mapa(const char *mapa, int jugador_x, int jugador_y, char player_character)
-{
-    clear();
-    for (int y = 0; y < FILAS; y++)
-    {
-        for (int x = 0; x < COLUMNAS; x++)
-        {
-            mvaddch(y, x, mapa[y * COLUMNAS + x]);
-        }
-    }
-    mvaddch(jugador_y, jugador_x, player_character);
-    refresh();
-}
+} */
 
 int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y)
 {
@@ -807,7 +795,8 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     return 1;
 }
 
-void mostrar_mapa_real()
+
+void jugar()
 {
     if (has_colors()) {
         start_color();
@@ -825,21 +814,18 @@ void mostrar_mapa_real()
         return;
     }
 
-    int fd;
-    size_t size;
-    char *mapa = inicializar_memoria_mapa(&fd, &size);
-    if (!mapa)
+    if (inicializar_memoria_mapa() != 0)
         return;
 
     int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
 
-    int jugador_x = 1, jugador_y = 1;
-    buscar_posicion_inicial(mapa, &jugador_x, &jugador_y);
+    int jugador_x = 1, jugador_y = 1;/* 
+    buscar_posicion_inicial(mapa, &jugador_x, &jugador_y); */
 
     int ch;
     keypad(stdscr, TRUE);
     curs_set(0);
-    timeout(100);
+    /* timeout(100); */
 
     while ((ch = getch()) != 'q') {
         if (ch == ERR) {
@@ -863,54 +849,31 @@ void mostrar_mapa_real()
             enviar_movimiento_al_servidor(jugador_x, jugador_y, key_respuestas_global, mailbox_solicitudes_id);
         }
 
-        dibujar_mapa_coloreado(mapa, FILAS, COLUMNAS, jugador_x, jugador_y, player_character);
+        dibujar_mapa_coloreado();
     }
 
     desconectar_del_servidor();
-    munmap(mapa, size);
+}
+
+void terminarPartida(int posicion_x, int posicion_y) {
+    endwin();
+    munmap(mapa, FILAS * (COLUMNAS + 1));
+    desconectar_servidor();
     close(fd);
 }
 
-void jugar()
-{
-    if (conectar_servidor(nombre_catacumba, tipo_jugador) != 0)
-    {
-        printf("No se pudo conectar al servidor.\n");
-        return;
-    }
 
-    int x = 1, y = 1;
-    int jugando = 1;
-    while (jugando)
-    {
-        if (enviar_movimiento(x, y, tipo_jugador) == 0)
-        {
-            char mensaje[256];
-            int codigo;
-            if (recibir_respuesta(mensaje, &codigo) == 0)
-            {
-                mvprintw(22, 0, "%s", mensaje);
-                refresh();
-                if (codigo == ST_GAME_OVER)
-                    jugando = 0;
-            }
-        }
-    }
-
-    desconectar_servidor();
-}
-
-void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugador_x, int jugador_y, char playerChar)
+void dibujar_mapa_coloreado()
 {
     attron(COLOR_PAIR(4));
     mvprintw(1, 2, "=== MAPA DE CATACUMBAS ===");
     attroff(COLOR_PAIR(4));
 
-    for (int y = 0; y < filas; y++)
+    for (int y = 0; y < FILAS; y++)
     {
-        for (int x = 0; x < columnas; x++)
+        for (int x = 0; x < COLUMNAS; x++)
         {
-            char c = mapa[y * columnas + x];
+            char c = mapa[y * COLUMNAS + x];
             if (c == '#' || c == CELDA_PARED)
             {
                 attron(COLOR_PAIR(1));
@@ -941,13 +904,13 @@ void dibujar_mapa_coloreado(const char *mapa, int filas, int columnas, int jugad
             }
         }
     }
-
+/* 
     attron(COLOR_PAIR(2) | A_BOLD);
     mvaddch(jugador_y + 4, jugador_x + 2, playerChar);
     attroff(COLOR_PAIR(2) | A_BOLD);
-
+ */
     attron(COLOR_PAIR(5));
-    mvprintw(filas + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
+    mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     attroff(COLOR_PAIR(5));
 
     refresh();

@@ -1,6 +1,5 @@
-#include "jugador.h"
-#include "../juego_constantes.h"
-#include "../../catacumbas/catacumbas.h"
+#include "juego_constantes.h"
+#include "../catacumbas/catacumbas.h"
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>

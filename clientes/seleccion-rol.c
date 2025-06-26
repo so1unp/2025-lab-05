@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
-#include "../juego_constantes.h"
+#include "juego_constantes.h"
 
 #define MENU_ITEMS 3
 #define MENU_WIDTH 40
