@@ -797,7 +797,7 @@ void atenderConexion(struct Jugador *jugador, struct RespuestaServidor *respuest
     if (conectarJugador(jugador) < 0) {
         construirRespuesta(respuesta, ERROR, "No se conectó el jugador");
     } else {
-        construirRespuesta(respuesta, _OK, "Jugador conectado con éxito");
+        construirRespuesta(respuesta, S_OK, "Jugador conectado con éxito");
     }
 }
 
@@ -806,7 +806,7 @@ void atenderDesconexion(struct Jugador *jugador, struct RespuestaServidor *respu
     if (desconectarJugador(jugador->pid) <0) {
         construirRespuesta(respuesta, ERROR, "no encontro al jugador");
     } else {
-        construirRespuesta (respuesta, _OK, "Jugador desconectado con exito");
+        construirRespuesta (respuesta, S_OK, "Jugador desconectado con exito");
     }
 }
 
@@ -815,7 +815,7 @@ void atenderMovimiento(struct Jugador *jugador, struct RespuestaServidor *respue
     if (moverJugador(jugador) < 0) { 
         construirRespuesta(respuesta,ERROR, "no encontro al jugador");
     } else {
-        construirRespuesta (respuesta, _OK, "Jugador se movio con exito");
+        construirRespuesta (respuesta, S_OK, "Jugador se movio con exito");
     } 
 }
 
@@ -824,7 +824,7 @@ void atenderCapturaTesoro(struct Jugador *jugador, struct RespuestaServidor *res
     imprimirTituloSolicitud(jugador->pid, "intenta capturar tesoro..."); 
     int codigo = capturarTesoro(jugador);
     if (codigo == 0) {
-        construirRespuesta(respuesta, _OK,"Tesoro capturado con exito");
+        construirRespuesta(respuesta, S_OK,"Tesoro capturado con exito");
     } else if (codigo == SIN_TESOROS) {
         construirRespuesta(respuesta, SIN_TESOROS,"Ya no quedan tesoros en el mapa");
     } else {
@@ -836,7 +836,7 @@ void atenderCapturaRaider(struct Jugador *jugador, struct RespuestaServidor *res
         imprimirTituloSolicitud(jugador->pid, "intenta capturar raider..."); 
     int codigo = capturarRaider(jugador);
     if (codigo == 0) {
-        construirRespuesta(respuesta, _OK,"Raider capturado con exito");
+        construirRespuesta(respuesta, S_OK,"Raider capturado con exito");
     } else if (codigo == SIN_RAIDERS) {
         construirRespuesta(respuesta, SIN_TESOROS,"Ya no quedan raiders en el mapa");
     } else {
