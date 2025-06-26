@@ -1,11 +1,10 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread -I../directorio -lrt
+CFLAGS=-Wall -Werror -g -pthread -lncurses
 
-PROGS=server
+PROGS=raider guardian
 
 .PHONY: all
 all: $(PROGS)
-
 
 %: %.c
 	$(CC) -o $@ $< $(CFLAGS)

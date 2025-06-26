@@ -67,6 +67,10 @@ dkms.conf
 catacumbas/server
 directorio/server
 directorio/clienteD
+directorio/catacumbas_persistidas.dat
+directorio/src/*.o
+directorio-server
+catacumbas_persistidas.dat
 clientes/raider
 clientes/guardian
 ejemplos/ncurses-pong
