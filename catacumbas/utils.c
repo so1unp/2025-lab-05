@@ -1,6 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "utils.h"
 #include "catacumbas.h" 
+
+void fatal(char msg[]) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
 
 void imprimirEstado(struct Estado *estado) {
     printf("\n===== ESTADO DEL SERVIDOR =====\n");

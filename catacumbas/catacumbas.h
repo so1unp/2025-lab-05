@@ -82,4 +82,29 @@ struct RespuestaServidor {
     char mensaje[MAX_LONGITUD_MENSAJES];
 };
 
+// Mapa y config
+struct Arena {
+    struct Tesoro tesoros[MAX_TESOROS];
+    struct Jugador jugadores[MAX_JUGADORES];
+    struct Estado *estado;       // Necesario si usa mmap
+    char (*mapa)[COLUMNAS];      // Tambien aca
+    int max_guardianes;
+    int max_raiders;
+    int max_tesoros;
+    int size_mapa;
+    int size_estado;
+};
+
+// memoria compartida y mailbox
+struct Comunicacion {
+    char memoria_mapa_nombre[128];
+    char memoria_estado_nombre[128];
+    int mailbox_solicitudes_clave;
+    int memoria_mapa_fd;
+    int memoria_estado_fd;
+    int mailbox_solicitudes_id;
+    int mailbox_directorio_solicitudes_id;
+    int mailbox_directorio_respuestas_id;
+};
+
 #endif

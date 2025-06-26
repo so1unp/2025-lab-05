@@ -6,8 +6,8 @@ PROGS=server
 .PHONY: all
 all: $(PROGS)
 
-server: server.c utils.c solicitudes.c
-	$(CC) -o $@ server.c utils.c solicitudes.c $(CFLAGS)
+server: server.c utils.c solicitudes.c config.c
+	$(CC) -o $@ $^ $(CFLAGS)
 
 %: %.c
 	$(CC) -o $@ $< $(CFLAGS)
