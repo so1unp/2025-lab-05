@@ -3,6 +3,24 @@
 #include "utils.h"
 #include "catacumbas.h" 
 
+void usage(char *argv[]) {
+    printf("Argumentos inválidos, por favor utilicelo de la siguiente forma:\n");
+    printf("\n");
+    printf("%s ruta/a/mapa.txt  ruta/a/config.properties\n",argv[0]);
+    printf("\n");
+    printf("    mapa.txt:\n");
+    printf("        El archivo del que se cargará el mapa.\n");
+    printf("        Debe ser de 80x25 sin espacios ni líneas extra\n");        
+    printf("\n");
+    printf("    config.properties:\n");
+    printf("        El archivo de configuraciones de mapa.\n");
+    printf("        Debe especificar:\n");
+    printf("        - max_tesoros=<maximo de tesoros>\n");
+    printf("        - max_raiders=<maximo de raiders>\n");
+    printf("        - max_guardianes=<maximo de guardianes>\n");
+
+}
+
 void fatal(char msg[]) {
     perror(msg);
     exit(EXIT_FAILURE);

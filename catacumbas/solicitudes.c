@@ -19,6 +19,7 @@ void recibirRespuestaDirectorio(int mailbox_directorio_respuestas_id, struct res
     // MUY IMPORTANTE usar getpid() para solo recibir los mensajes de este servidor
     if (msgrcv(mailbox_directorio_respuestas_id, respuesta, sizeof(struct respuesta) - sizeof(long), getpid(), 0) == -1) {
         perror("🚫 Error al recibir respuesta de Directorio");
+        respuesta->codigo = ERROR;
     } else {
         printf("Respuesta de directorio recibida:\n");
         printf("- Mtype: %li\n", respuesta->mtype);

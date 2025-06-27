@@ -87,7 +87,9 @@ void finish()
         perror("🚫 Error al eliminar el buzón de solicitudes, por favor eliminelo manualmente con ipcs -q y luego ipcrm -q <id>");
         exit(EXIT_FAILURE);
     }
-    printf("Programa terminado\n");
+    printf("\n═══════════════════════════════════════════════════════════════\n");
+    printf("           SERVIDOR DE CATACUMBA TERMINADO 🗿🚬                 \n");
+    printf("═══════════════════════════════════════════════════════════════\n\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -164,25 +166,10 @@ void setup(char rutaMapa[], char rutaConfig[]) {
         comunicacion->memoria_estado_nombre,
         comunicacion->mailbox_solicitudes_clave
     );
+    
     struct respuesta respuesta_directorio;
     enviarSolicitudDirectorio(comunicacion, &solicitud_directorio, &respuesta_directorio);
-
+    // MAX CANT CATACUMBAS O DIRECTORIO NO RESPONDE
+    if (respuesta_directorio.codigo == RESP_LIMITE_ALCANZADO || respuesta_directorio.codigo == ERROR) finish();
 }
 
-void usage(char *argv[]) {
-    printf("Argumentos inválidos, por favor utilicelo de la siguiente forma:\n");
-    printf("\n");
-    printf("%s ruta/a/mapa.txt  ruta/a/config.properties\n",argv[0]);
-    printf("\n");
-    printf("    mapa.txt:\n");
-    printf("        El archivo del que se cargará el mapa.\n");
-    printf("        Debe ser de 80x25 sin espacios ni líneas extra\n");        
-    printf("\n");
-    printf("    config.properties:\n");
-    printf("        El archivo de configuraciones de mapa.\n");
-    printf("        Debe especificar:\n");
-    printf("        - max_tesoros=<maximo de tesoros>\n");
-    printf("        - max_raiders=<maximo de raiders>\n");
-    printf("        - max_guardianes=<maximo de guardianes>\n");
-
-}

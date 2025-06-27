@@ -33,6 +33,7 @@
 #define S_OK 1
 #define SIN_TESOROS 2
 #define SIN_RAIDERS 3
+#define MUERTO 4        // te capturaron
 // Los que envian los clientes:
 #define CONEXION 5
 #define DESCONEXION 6
