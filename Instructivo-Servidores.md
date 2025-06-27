@@ -1,0 +1,186 @@
+# Instructivo de Uso - Inicializador y Terminador de Servidores
+
+Este documento explica cómo usar los scripts de automatización para ejecutar los servidores necesarios para el juego de catacumbas.
+
+## 📋 Requisitos Previos
+
+Antes de usar los scripts, asegúrate de tener:
+
+1. **Archivos de configuración:**
+   - `catacumbas/mapa.txt` - Mapa del juego
+   - `catacumbas/config.properties` - Configuración del servidor
+
+2. **Estructura del proyecto:**
+   ```
+   proyecto/
+   ├── Makefile
+   ├── catacumbas/
+   ├── directorio/
+   ├── clientes/
+   ├── iniciar-servidores.sh
+   └── stop.sh
+   ```
+
+## 🚀 Script de Inicialización (`iniciar-servidores.sh`)
+
+### Paso 1: Dar Permisos de Ejecución
+
+```bash
+chmod +x ./iniciar-servidores.sh
+```
+
+### Paso 2: Uso del Script
+
+#### Mostrar Ayuda
+```bash
+./iniciar-servidores.sh -h
+# o
+./iniciar-servidores.sh --help
+```
+
+#### Iniciar un Servidor (por defecto)
+```bash
+./iniciar-servidores.sh
+```
+- Compila e inicia 1 servidor de directorio
+- Compila e inicia 1 servidor de catacumbas
+
+#### Iniciar Múltiples Servidores de Catacumbas
+```bash
+./iniciar-servidores.sh -c 3
+# o
+./iniciar-servidores.sh --count 3
+```
+- Compila e inicia 1 servidor de directorio
+- Compila e inicia 3 servidores de catacumbas
+
+### ¿Qué Hace el Script?
+
+1. **Validación:**
+   - Verifica que estés en el directorio correcto
+   - Confirma la existencia de archivos necesarios
+   - Valida los parámetros de entrada
+
+2. **Compilación:**
+   - Compila el servidor de directorio (`make directorio`)
+   - Compila el servidor de catacumbas (`make catacumbas`)
+
+3. **Ejecución:**
+   - Inicia el servidor de directorio en segundo plano
+   - Inicia los servidores de catacumbas especificados
+   - Verifica que todos los procesos se inicien correctamente
+
+4. **Monitoreo:**
+   - Muestra el estado de todos los servidores en tiempo real
+   - Actualiza la información cada 5 segundos
+   - Permite detener todos los servidores con `Ctrl+C`
+
+5. **Limpieza Automática:**
+   - Al presionar `Ctrl+C` o cerrar el terminal
+   - Detiene todos los procesos iniciados
+   - Limpia recursos IPC (memoria compartida y colas de mensajes)
+
+## 🛑 Script de Parada (`stop.sh`)
+
+### Paso 1: Dar Permisos de Ejecución
+
+```bash
+chmod +x ./stop.sh
+```
+
+### Paso 2: Usar el Script
+
+```bash
+./stop.sh
+```
+
+### ¿Qué Hace el Script?
+
+1. **Detener Procesos:**
+   - Busca y termina todos los procesos `directorio-server`
+   - Busca y termina todos los procesos `catacumbas-server`
+
+2. **Limpieza de Recursos:**
+   - Elimina colas de mensajes IPC del usuario
+   - Elimina segmentos de memoria compartida del usuario
+   - Elimina archivos de log temporales
+
+3. **Confirmación:**
+   - Muestra mensajes confirmando qué se detuvo
+   - Informa cuando la limpieza está completa
+
+## 📝 Ejemplos de Uso Completo
+
+### Escenario 1: Juego Simple (1 servidor)
+```bash
+# Dar permisos (solo la primera vez)
+chmod +x ./iniciar-servidores.sh ./stop.sh
+
+# Iniciar servidores
+./iniciar-servidores.sh
+
+# En otra terminal, compilar y ejecutar cliente
+make -C clientes
+./clientes/main
+
+# Cuando termines, detener servidores
+# Opción 1: Ctrl+C en la terminal del script
+# Opción 2: Desde otra terminal
+./stop.sh
+```
+
+### Escenario 2: Servidor Múltiple (3 catacumbas)
+```bash
+# Iniciar múltiples servidores
+./iniciar-servidores.sh -c 3
+
+# Los clientes podrán conectarse a cualquiera de las 3 catacumbas
+# El servidor de directorio gestiona la lista de catacumbas disponibles
+
+# Detener todos
+./stop.sh
+```
+
+## 🔧 Opciones Avanzadas
+
+### Parámetros del Script de Inicialización
+
+| Parámetro | Descripción | Ejemplo |
+|-----------|-------------|---------|
+| `-h, --help` | Muestra ayuda detallada | `./iniciar-servidores.sh -h` |
+| `-c N, --count N` | Inicia N servidores de catacumbas | `./iniciar-servidores.sh -c 5` |
+
+### Límites y Validaciones
+
+- **Mínimo:** 1 servidor de catacumbas
+- **Máximo recomendado:** 10 servidores (el script pregunta confirmación para más)
+- **Validación:** Solo acepta números enteros positivos
+
+## 🐛 Solución de Problemas
+
+### Error: "No se encontraron los directorios necesarios"
+- **Causa:** No estás en el directorio raíz del proyecto
+- **Solución:** Navega al directorio que contiene el `Makefile`
+
+### Error: "No se encontró el archivo mapa.txt"
+- **Causa:** Falta el archivo de configuración del mapa
+- **Solución:** Verifica que existe `catacumbas/mapa.txt`
+
+### Error: "El servidor no se pudo iniciar"
+- **Causa:** Error de compilación o problema en el código
+- **Solución:** Revisa los logs mostrados en pantalla para más detalles
+
+### Los servidores no se detienen correctamente
+- **Solución:** Ejecuta `./stop.sh` para limpieza forzada
+
+### Recursos IPC no se liberan
+```bash
+# Ver recursos IPC en uso
+ipcs
+
+# Limpiar manualmente (si es necesario)
+ipcs -q | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -q
+ipcs -m | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -m
+```
+
+
