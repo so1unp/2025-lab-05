@@ -145,16 +145,17 @@ make -C clientes
 
 ### Parámetros del Script de Inicialización
 
-| Parámetro | Descripción | Ejemplo |
-|-----------|-------------|---------|
-| `-h, --help` | Muestra ayuda detallada | `./iniciar-servidores.sh -h` |
+| Parámetro         | Descripción                       | Ejemplo                        |
+| ----------------- | --------------------------------- | ------------------------------ |
+| `-h, --help`      | Muestra ayuda detallada           | `./iniciar-servidores.sh -h`   |
 | `-c N, --count N` | Inicia N servidores de catacumbas | `./iniciar-servidores.sh -c 5` |
 
 ### Límites y Validaciones
 
 - **Mínimo:** 1 servidor de catacumbas
-- **Máximo recomendado:** 10 servidores (el script pregunta confirmación para más)
+- **Máximo:** 10 servidores (límite del sistema - MAX_CATACUMBAS)
 - **Validación:** Solo acepta números enteros positivos
+- **Auto-limitación:** Si solicitas más de 10, automáticamente se limita a 10
 
 ## 🐛 Solución de Problemas
 
@@ -179,8 +180,5 @@ make -C clientes
 ipcs
 
 # Limpiar manualmente (si es necesario)
-ipcs -q | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -q
-ipcs -m | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -m
+ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 ```
-
-

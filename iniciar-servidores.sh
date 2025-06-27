@@ -97,15 +97,11 @@ parse_arguments() {
         show_help
     fi
     
-    # Validar límites razonables
+    # Validar límites del sistema (MAX_CATACUMBAS = 10)
     if [ "$CATACUMBAS_COUNT" -gt 10 ]; then
-        print_warning "Advertencia: Iniciar más de 10 servidores puede ser intensivo en recursos"
-        read -p "¿Continuar? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_info "Operación cancelada"
-            exit 0
-        fi
+        print_warning "Advertencia: Se solicitaron $CATACUMBAS_COUNT servidores, pero el máximo permitido es 10"
+        print_info "Limitando automáticamente a 10 servidores de catacumbas"
+        CATACUMBAS_COUNT=10
     fi
 }
 
@@ -131,8 +127,8 @@ cleanup() {
     
     # Limpiar recursos IPC si es necesario
     print_info "Limpiando recursos del sistema..."
-    ipcs -q | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -q 2>/dev/null
-    ipcs -m | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -m 2>/dev/null
+    ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q 2>/dev/null
+    ipcs -m | grep $USER | awk '{print $2}' | xargs -r ipcrm -m 2>/dev/null
     
     print_success "Limpieza completada"
     exit 0

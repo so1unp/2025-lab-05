@@ -9,8 +9,8 @@ pkill -f catacumbas-server 2>/dev/null && echo "🗿 Servidor de catacumbas dete
 
 # Limpiar recursos IPC
 echo "🧹 Limpiando recursos del sistema..."
-ipcs -q | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -q 2>/dev/null
-ipcs -m | grep $(whoami) | awk '{print $2}' | xargs -r ipcrm -m 2>/dev/null
+ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q 2>/dev/null
+ipcs -m | grep $USER | awk '{print $2}' | xargs -r ipcrm -m 2>/dev/null
 
 # Limpiar archivos de log
 rm -f directorio.log catacumbas.log 2>/dev/null
