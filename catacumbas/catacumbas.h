@@ -27,11 +27,18 @@
 #define MEMORIA_ESTADO_PREFIJO "/servidor-estado-"
 #define MAILBOX_SOLICITUDES_SUFIJO 10
 
-// ACCIONES
-#define CONEXION 1
-#define DESCONEXION 2
-#define MOVERSE 3
-#define NOTIFICACION 4
+// CODIGOS DE ACCIONES
+// Los que envia servidor:
+#define ERROR -1
+#define S_OK 1
+#define SIN_TESOROS 2
+#define SIN_RAIDERS 3
+// Los que envian los clientes:
+#define CONEXION 5
+#define DESCONEXION 6
+#define MOVIMIENTO 7
+#define TESORO_CAPTURADO 8
+#define RAIDER_CAPTURADO 9
 
 struct Posicion {
     int fila;
