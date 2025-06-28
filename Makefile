@@ -20,7 +20,10 @@ DIRECTORIO_SOURCES=$(SRC_DIR)/main.c \
                $(SRC_DIR)/ping.c
 
 # Archivos fuente del servidor de catacumbas
-CATACUMBAS_SOURCES=$(CATACUMBAS_DIR)/server.c
+CATACUMBAS_SOURCES=$(CATACUMBAS_DIR)/server.c \
+				$(CATACUMBAS_DIR)/utils.c \
+				$(CATACUMBAS_DIR)/solicitudes.c \
+				$(CATACUMBAS_DIR)/config.c 
 
 # Archivos objeto de los servidores
 DIRECTORIO_OBJECTS=$(DIRECTORIO_SOURCES:.c=.o)
