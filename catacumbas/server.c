@@ -53,12 +53,13 @@ int main(int argc, char *argv[]) {
     setup(argv[1], argv[2]);
 
     // RECIBIR SOLICITUDES DE CLIENTES
-    while (1) {
+    while ((arena->estado->cant_raiders >= 0)  && arena->estado->cant_tesoros > 0) {
         printf("Esperando solicitudes...\n");
         struct SolicitudServidor solicitud;
         if (recibirSolicitudes(&solicitud, comunicacion->mailbox_solicitudes_id))
             atenderSolicitud(&solicitud, arena);
     }
+    // notificarFinalJuego(arena);
     finish();
 }
 
@@ -72,8 +73,9 @@ int main(int argc, char *argv[]) {
  * mensajes y libera la memoria de la estructura del servidor.
  *
  */
-void finish()
-{
+void finish() {
+    notificarFinalJuego(arena);
+
     if (shm_unlink(comunicacion->memoria_mapa_nombre) < 0)
         fatal("Error al borrar memoria mapa");
     if (shm_unlink(comunicacion->memoria_estado_nombre) < 0)

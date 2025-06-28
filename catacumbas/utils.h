@@ -7,6 +7,10 @@
 #define ANSI_YELLOW "\x1b[33m"
 #define ANSI_BLUE "\x1b[34m"
 
+// ==================
+//  UTILIDADES
+// ==================
+
 void usage(char *argv[]);
 void fatal(char msg[]);
 void imprimirTesoros(struct Tesoro *tesoros, struct Estado *estado);

@@ -49,7 +49,9 @@ struct Posicion {
 struct Jugador {
     long pid;
     struct Posicion posicion;
-    char nombre[MAX_LONGITUD_NOMBRE_JUGADOR];
+    int clave_mailbox_respuestas;
+    // char nombre[MAX_LONGITUD_NOMBRE_JUGADOR];
+    // int cantidadCapturada; // tesoro o exploradores
     char tipo;
 };
 
@@ -83,7 +85,7 @@ struct RespuestaServidor {
     char mensaje[MAX_LONGITUD_MENSAJES];
 };
 
-// Mapa y config
+// mapa (jugadores, tesoros, estado) con sus reglas
 struct Arena {
     struct Tesoro tesoros[MAX_TESOROS];
     struct Jugador jugadores[MAX_JUGADORES];
@@ -96,7 +98,7 @@ struct Arena {
     int size_estado;
 };
 
-// memoria compartida y mailbox
+// memoria compartida y mensajeria
 struct Comunicacion {
     char memoria_mapa_nombre[128];
     char memoria_estado_nombre[128];

@@ -7,8 +7,8 @@
 #include "solicitudes.h"
 #include "utils.h"
 
-#define RANDOM_FILAS()(1 + rand() % (FILAS-2));
-#define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
+#define RANDOM_FILAS() (1 + rand() % (FILAS-2))
+#define RANDOM_COLMS() (1 + rand() % (COLUMNAS-2))
 
 // ===================================
 //      MENSAJERIA CON DIRECTORIO
@@ -44,10 +44,11 @@ void enviarSolicitudDirectorio(struct Comunicacion *comunicacion, struct solicit
 //      PARTE LOGICA
 // ===================================
 
-int aceptarJugador(struct Estado *estado, struct Arena *arena, struct Jugador *jugador) {
+int aceptarJugador(struct Estado *estado, struct Arena *arena,
+                struct Jugador *jugador) {
     if (estado->cant_jugadores >= MAX_JUGADORES) {
-        printf("[LOG] Rechazado: servidor lleno (%d/%d).\n", estado->cant_jugadores,
-               MAX_JUGADORES);
+        printf("[LOG] Rechazado: servidor lleno (%d/%d).\n",
+             estado->cant_jugadores, MAX_JUGADORES);
         return 0;
     }
     switch (jugador->tipo) {
@@ -70,8 +71,7 @@ int aceptarJugador(struct Estado *estado, struct Arena *arena, struct Jugador *j
                jugador->tipo);
         return 0;
     }
-    printf("[LOG] Jugador '%s' (tipo: %c) puede ser aceptado.\n", jugador->nombre,
-           jugador->tipo);
+    printf("[LOG] Jugador (tipo: %c) puede ser aceptado.\n", jugador->tipo);
     return 1;
 }
 
@@ -113,7 +113,7 @@ void spawnearJugador(struct Jugador *jugador, struct Arena *arena) {
     }
     jugador->posicion = (struct Posicion){fila, columna};
     arena->mapa[fila][columna] = jugador->tipo;
-    printf("[LOG] Jugador '%s' spawneado en (%d, %d).\n", jugador->nombre,
+    printf("[LOG] Jugador spawneado en (%d, %d).\n",
            jugador->posicion.fila, jugador->posicion.columna);
 }
 
@@ -137,7 +137,7 @@ int recibirSolicitudes(struct SolicitudServidor *solicitud, int mailbox_solicitu
     }
 }
 
-void responderSolicitud(int clave_mailbox_respuestas,
+void enviarMensajeCliente(int clave_mailbox_respuestas,
     struct RespuestaServidor *respuesta) {
    int id_mailbox_cliente = msgget(clave_mailbox_respuestas, 0);
    if (id_mailbox_cliente == -1) {
@@ -161,7 +161,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud, struct Arena *arena) 
     struct Jugador jugador; // el jugador que realizo la solicitud
     jugador.pid = solicitud->mtype;
     jugador.posicion = (struct Posicion) {solicitud->fila , solicitud->columna};
-    // TODO: jugador.nombre
+    jugador.clave_mailbox_respuestas = solicitud->clave_mailbox_respuestas;
     jugador.tipo = solicitud->tipo;
     
     struct RespuestaServidor respuesta;
@@ -186,7 +186,7 @@ void atenderSolicitud(struct SolicitudServidor *solicitud, struct Arena *arena) 
     default:
         break;
     }
-    responderSolicitud(solicitud->clave_mailbox_respuestas, &respuesta);
+    enviarMensajeCliente(solicitud->clave_mailbox_respuestas, &respuesta);
     imprimirEstado(arena->estado);
 }
 
@@ -202,7 +202,7 @@ int buscarJugador(long pid, struct Arena *arena) {
 }
 
 int conectarJugador(struct Jugador *jugador, struct Arena *arena) {
-    // if (buscarJugador(jugador->pid) != -1) return -1; // ya existe
+    // if (buscarJugador(jugador->pid, arena) != -1) return -1; // ya existe
     if (!aceptarJugador(arena->estado, arena, jugador)) return -1; // verificar
     spawnearJugador(jugador, arena); // darle una posicion
     arena->jugadores[arena->estado->cant_jugadores++] = *jugador; // incrementar cantidad
@@ -276,17 +276,20 @@ int capturarRaider(struct Jugador *jugador, struct Arena *arena) {
         if (arena->jugadores[i].tipo == RAIDER &&
             arena->jugadores[i].posicion.fila == fila &&
             arena->jugadores[i].posicion.columna == columna) {
+
+            notificarMuerte(&arena->jugadores[i]);
+
             arena->mapa[fila][columna] = GUARDIAN;
-            
             arena->mapa[arena->jugadores[pos].posicion.fila]
                 [arena->jugadores[pos].posicion.columna] = VACIO;
+
             arena->jugadores[pos].posicion = jugador->posicion;
             for (j = i; j < arena->estado->cant_jugadores - 1; j++) {
                 arena->jugadores[j] = arena->jugadores[j + 1];
             }
             arena->estado->cant_jugadores--;
             arena->estado->cant_raiders--;
-            return 0;
+            return (arena->estado->cant_raiders > 0) ? 0 : SIN_RAIDERS; // si captura el ultimo raider
         }
     }
     return -1;
@@ -344,8 +347,32 @@ void atenderCapturaRaider(struct Jugador *jugador, struct RespuestaServidor *res
     if (codigo == 0) {
         construirRespuesta(respuesta, S_OK,"Raider capturado con exito");
     } else if (codigo == SIN_RAIDERS) {
-        construirRespuesta(respuesta, SIN_TESOROS,"Ya no quedan raiders en el mapa");
+        construirRespuesta(respuesta, SIN_RAIDERS,"Ya no quedan raiders en el mapa");
+        arena->estado->cant_raiders = -1;
     } else {
         construirRespuesta(respuesta, ERROR, "No hay raider en esta posicion");
+    }
+}
+
+// jugador es quien fue capturado
+void notificarMuerte(struct Jugador *jugador){
+    struct RespuestaServidor respuesta;
+    respuesta.mtype = jugador->pid;
+    construirRespuesta(&respuesta, MUERTO,"☠️ Fuiste capturado.");
+    enviarMensajeCliente(jugador->clave_mailbox_respuestas, &respuesta);
+}
+
+void notificarFinalJuego(struct Arena *arena) {
+    struct RespuestaServidor respuesta;
+    if (!arena->estado->cant_tesoros)
+        construirRespuesta(&respuesta, SIN_TESOROS,"No quedan tesoros. Ganan los raiders");
+    else if (arena->estado->cant_raiders < 0)
+        construirRespuesta(&respuesta, SIN_RAIDERS,"No quedan raiders. Ganan los guardianes");
+    else construirRespuesta(&respuesta, S_OK,"Fin del juego: no gano nadie");
+    
+    int i;
+    for (i = 0; i < arena->estado->cant_jugadores; i++) {
+        respuesta.mtype = arena->jugadores[i].pid;
+        enviarMensajeCliente(arena->jugadores[i].clave_mailbox_respuestas, &respuesta);
     }
 }
