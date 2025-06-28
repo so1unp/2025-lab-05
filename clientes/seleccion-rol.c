@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
-#include "juego_constantes.h"
+#include "../catacumbas/catacumbas.h"
 
 #define MENU_ITEMS 3
 #define MENU_WIDTH 40
@@ -81,8 +81,8 @@ int mostrar_menu_rol()
                  "Usa las flechas para navegar, ENTER para seleccionar");
 
         // Mostrar caracteres del juego
-        mvprintw(max_y / 2 + 4, max_x / 2 - 15, "Explorador: %c", JUGADOR_EXPLORADOR);
-        mvprintw(max_y / 2 + 5, max_x / 2 - 15, "Guardian:   %c", JUGADOR_GUARDIAN);
+        mvprintw(max_y / 2 + 4, max_x / 2 - 15, "Explorador: %c", RAIDER);
+        mvprintw(max_y / 2 + 5, max_x / 2 - 15, "Guardian:   %c", GUARDIAN);
 
         refresh();
 
@@ -115,11 +115,11 @@ int mostrar_menu_seleccion_rol()
 
     switch (rol_seleccionado)
     {
-    case JUGADOR_EXPLORADOR:
+    case RAIDER:
         printf("Has seleccionado: EXPLORADOR\n");
         printf("Tu misión: Buscar tesoros y evitar ser capturado\n");
         break;
-    case JUGADOR_GUARDIAN:
+    case GUARDIAN:
         printf("Has seleccionado: GUARDIAN\n");
         printf("Tu misión: Proteger las catacumbas y capturar exploradores\n");
         break;

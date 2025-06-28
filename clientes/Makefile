@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Werror -g -pthread -lncurses -std=c99 -D_XOPEN_SOURCE=700 -lrt
+CFLAGS=-Wall -Werror -g -pthread -lncurses -std=c99 -D_XOPEN_SOURCE=700 -lrt -lc
 
 PROGS=main
 

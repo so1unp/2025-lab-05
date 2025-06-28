@@ -1,48 +1,172 @@
+/**
+ * @file main.c
+ * @brief Cliente principal del juego de catacumbas - Sistema de menús y navegación
+ * @author Equipo de desarrollo
+ * @date 2025
+ * 
+ * Este archivo contiene la implementación del sistema de menús principal del juego,
+ * incluyendo la navegación entre opciones, conexión al directorio de servidores,
+ * y la gestión de la interfaz de usuario principal.
+ */
+
+#define _GNU_SOURCE
+
+// ============================================================================
+// INCLUDES DEL SISTEMA
+// ============================================================================
 #include <stdio.h>
 #include <stdlib.h>
-#include <ncurses.h>
 #include <unistd.h>
 #include <string.h>
-#include "juego_constantes.h"
-#include "../directorio/directorio.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+
+// ============================================================================
+// INCLUDES DEL PROYECTO
+// ============================================================================
+#include <ncurses.h>
+#include "../directorio/directorio.h"
 #include "../catacumbas/catacumbas.h"
 #include "status.h"
-#include "status.h"
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <string.h>
 
+// ============================================================================
+// CONSTANTES DEL MENU PRINCIPAL
+// ============================================================================
 #define MENU_PRINCIPAL_ITEMS 5
 #define MENU_WIDTH 50
 
+// ============================================================================
+// ESTRUCTURAS Y TIPOS DE DATOS
+// ============================================================================
+
+/**
+ * @struct Map
+ * @brief Estructura que representa una catacumba disponible
+ * 
+ * Contiene toda la información necesaria para identificar y conectarse
+ * a una catacumba específica en el sistema.
+ */
 typedef struct
 {
-    char nombre[64];
-    char direccion[128];
-    int mailbox;
-    int players_connected;
-    int max_players;
+    char nombre[64];           /**< Nombre identificativo de la catacumba */
+    char direccion[128];       /**< Ruta de memoria compartida del mapa */
+    int mailbox;              /**< ID del mailbox para comunicación */
+    int players_connected;    /**< Número actual de jugadores conectados */
+    int max_players;          /**< Número máximo de jugadores permitidos */
 } Map;
 
-int tipo_jugador = JUGADOR_EXPLORADOR;
+/**
+ * @struct OpcionMenuPrincipal
+ * @brief Estructura que define una opción del menú principal
+ * 
+ * Encapsula la información de visualización y funcionalidad de cada
+ * opción disponible en el menú principal del juego.
+ */
+typedef struct
+{
+    char *texto;              /**< Texto que se muestra en el menú */
+    char *descripcion;        /**< Descripción detallada de la opción */
+    int (*funcion)();         /**< Puntero a función que ejecuta la opción */
+} OpcionMenuPrincipal;
+
+// ============================================================================
+// VARIABLES GLOBALES DEL SISTEMA
+// ============================================================================
+
+/** @brief Tipo de jugador por defecto (RAIDER o GUARDIAN) */
+int tipo_jugador = RAIDER;
+
+/** @brief Nombre de la catacumba seleccionada */
 char nombre_catacumba[128] = "catacumba1";
+
+/** @brief Rol seleccionado por el jugador */
 char selected_role[50] = "NO SELECCIONADO";
+
+/** @brief Mapa seleccionado por el jugador */
 char selected_map[50] = "NO SELECCIONADO";
-char player_character = 'E';
+
+/** @brief Carácter que representa al jugador en el mapa */
+char player_character = RAIDER;
+
+/** @brief Ruta de memoria compartida del mapa seleccionado */
 char selected_shm_path[128];
+
+/** @brief ID del mailbox del servidor seleccionado */
 int selected_mailbox;
+
+/** @brief Posición inicial del jugador en el mapa */
 int jugador_x = 1, jugador_y = 1;
+
+/** @brief Clave global para mailbox de respuestas */
 key_t key_respuestas_global = 0;
+
+/** @brief Puntero a la memoria compartida del mapa */
 char *mapa = NULL;
+
+/** @brief Descriptor de archivo de memoria compartida */
 int fd = -1;
 
+// ============================================================================
+// DECLARACIONES DE FUNCIONES EXTERNAS
+// ============================================================================
+
+/** @brief Función que muestra el juego en modo demo */
+extern int mostrar_base(char player_character);
+
+/** @brief Función que muestra el menú de selección de rol */
+extern int mostrar_menu_rol();
+
+/** @brief Función que muestra el menú de selección de mapa */
+extern int mostrar_seleccion_mapa(Map *maps, int num_maps);
+
+/** @brief Función principal del juego implementada en jugador.c */
+extern void jugar();
+
+// ============================================================================
+// DECLARACIONES DE FUNCIONES PRIVADAS
+// ============================================================================
+
+/** @brief Ejecuta el modo demo del juego */
+int ejecutar_base();
+
+/** @brief Ejecuta la selección de mapa desde el directorio */
+int ejecutar_seleccion_mapa();
+
+/** @brief Ejecuta la selección de rol del jugador */
+int ejecutar_seleccion_rol();
+
+/** @brief Busca y muestra las catacumbas disponibles */
+int mostrar_listado_mapas_y_seleccionar();
+
+/** @brief Formatea y muestra la lista de catacumbas */
+void mostrar_catacumbas_formateadas(char *datos);
+
+/** @brief Establece el carácter del jugador */
+void setPlayChar(char c);
+
+/** @brief Busca catacumbas disponibles y permite seleccionar una */
+int buscar_catacumbas_disponibles();
+
+/** @brief Muestra el menú principal del sistema */
+int mostrar_menu_principal();
+
+// ============================================================================
+// FUNCIONES DE CONFIGURACIÓN DEL JUEGO
+// ============================================================================
+
+/**
+ * @brief Establece el rol del jugador en el sistema
+ * @param role Cadena que representa el rol seleccionado
+ * 
+ * Actualiza la variable global selected_role con el rol proporcionado,
+ * asegurando que la cadena esté correctamente terminada.
+ */
 void set_game_role(const char *role)
 {
     if (role != NULL)
@@ -52,6 +176,13 @@ void set_game_role(const char *role)
     }
 }
 
+/**
+ * @brief Establece el mapa seleccionado en el sistema
+ * @param map Cadena que representa el nombre del mapa seleccionado
+ * 
+ * Actualiza la variable global selected_map con el mapa proporcionado,
+ * asegurando que la cadena esté correctamente terminada.
+ */
 void set_game_map(const char *map)
 {
     if (map != NULL)
@@ -61,134 +192,27 @@ void set_game_map(const char *map)
     }
 }
 
-extern int mostrar_base(char player_character);
-extern int mostrar_menu_rol();
-extern int mostrar_seleccion_mapa(Map *maps, int num_maps);
-
-void notificar_evento_juego(int code, const char *texto);
-
-int ejecutar_base();
-int ejecutar_seleccion_mapa();
-int ejecutar_seleccion_rol();
-int mostrar_listado_mapas_y_seleccionar();
-void jugar();
-void dibujar_mapa_coloreado();
-void mostrar_catacumbas_formateadas(char *datos);
-
-typedef struct
-{
-    char *texto;
-    char *descripcion;
-    int (*funcion)();
-} OpcionMenuPrincipal;
-
-int conectar_al_servidor() {
-    key_t key_respuestas = ftok("/tmp", getpid());
-    int mailbox_respuestas = msgget(key_respuestas, IPC_CREAT | 0666);
-    key_respuestas_global = key_respuestas;
-    
-    if (mailbox_respuestas == -1) {
-        perror("Error creando mailbox de respuestas");
-        return -1;
-    }
-    
-    struct SolicitudServidor solicitud;
-    solicitud.mtype = getpid();
-    solicitud.codigo = CONEXION;
-    solicitud.clave_mailbox_respuestas = key_respuestas;
-    solicitud.fila = 0;
-    solicitud.columna = 0;
-    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
-    
-    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
-    if (mailbox_solicitudes_id == -1) {
-        perror("Error conectando al mailbox del servidor");
-        return -1;
-    }
-    
-    if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), 0) == -1) {
-        perror("Error enviando solicitud de conexión");
-        return -1;
-    }
-    
-    struct RespuestaServidor respuesta;
-    if (msgrcv(mailbox_respuestas, &respuesta, sizeof(respuesta) - sizeof(long), 
-               getpid(), 0) == -1) {
-        perror("Error recibiendo respuesta de conexión");
-        return -1;
-    }
-    
-    if (respuesta.codigo != S_OK) {
-        mvprintw(FILAS + 4, 0, "Error del servidor: %s", respuesta.mensaje);
-        return -1;
-    }
-    
-    mvprintw(FILAS + 4, 0, "Conectado: %s", respuesta.mensaje);
-    refresh();
-    
-    return 0;
-}
-
-void desconectar_del_servidor() {
-    struct SolicitudServidor solicitud;
-    solicitud.mtype = getpid();
-    solicitud.codigo = DESCONEXION;
-    solicitud.clave_mailbox_respuestas = key_respuestas_global;
-    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
-    
-    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
-    if (mailbox_solicitudes_id != -1) {
-        msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT);
-    }
-    
-    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
-    if (mailbox_respuestas != -1) {
-        msgctl(mailbox_respuestas, IPC_RMID, NULL);
-    }
-    
-    mvprintw(FILAS + 4, 0, "Desconectado del servidor");
-    refresh();
-}
-
-void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id)
-{
-    struct SolicitudServidor solicitud;
-    solicitud.mtype = getpid();
-    solicitud.codigo = MOVIMIENTO;
-    solicitud.clave_mailbox_respuestas = key_respuestas_global;
-    solicitud.fila = jugador_y;
-    solicitud.columna = jugador_x;
-    solicitud.tipo = (selected_role[0] == 'E') ? RAIDER : GUARDIAN;
-    
-    if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT) == -1) {
-        perror("Error enviando movimiento");
-    }
-    
-    struct RespuestaServidor respuesta;
-    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
-    if (msgrcv(mailbox_respuestas, &respuesta, sizeof(respuesta) - sizeof(long), 
-               getpid(), IPC_NOWAIT) != -1) {
-        
-        switch(respuesta.codigo) {
-            case S_OK:
-                mvprintw(FILAS + 5, 0, "Movimiento OK");
-                break;
-            case ERROR:
-                mvprintw(FILAS + 5, 0, "Error: %s", respuesta.mensaje);
-                break;
-            case SIN_TESOROS:
-                mvprintw(FILAS + 5, 0, "Victoria! Todos los tesoros recolectados");
-                break;
-            case SIN_RAIDERS:
-                mvprintw(FILAS + 5, 0, "Victoria! Todos los raiders capturados");
-                break;
-        }
-        refresh();
-    }
-}
-
+// ============================================================================
+// FUNCIONES DE COMUNICACIÓN CON EL DIRECTORIO
+// ============================================================================
+/**
+ * @brief Busca catacumbas disponibles en el directorio y permite al jugador conectarse
+ * @return 0 en caso de éxito o error, -1 si se debe salir del programa
+ * 
+ * Esta función se conecta al servidor de directorio para obtener la lista
+ * de catacumbas disponibles, permite al usuario seleccionar una, y luego
+ * inicia la partida en la catacumba seleccionada.
+ * 
+ * Flujo de ejecución:
+ * 1. Se conecta a los mailboxes del directorio
+ * 2. Solicita la lista de catacumbas disponibles
+ * 3. Procesa la respuesta y crea una lista de mapas
+ * 4. Permite al usuario seleccionar un mapa
+ * 5. Inicia el juego en el mapa seleccionado
+ */
 int buscar_catacumbas_disponibles()
 {
+    // Intentar conectar con el servidor de directorio
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
 
@@ -443,25 +467,50 @@ void mostrar_catacumbas_formateadas(char *datos)
     }
 }
 
+// ============================================================================
+// FUNCIONES DE INTERFAZ PRINCIPAL
+// ============================================================================
+
+/**
+ * @brief Muestra y gestiona el menú principal del sistema
+ * @return 0 si el usuario elige salir, -1 en caso de error
+ * 
+ * Esta función implementa el bucle principal de la interfaz de usuario:
+ * - Presenta las opciones disponibles del sistema
+ * - Maneja la navegación con las teclas de flecha
+ * - Ejecuta las funciones correspondientes a cada opción
+ * - Mantiene el estado de ncurses entre operaciones
+ * 
+ * Las opciones disponibles incluyen:
+ * - Juego demo con mapa fijo
+ * - Búsqueda de partidas reales
+ * - Selección de rol de jugador
+ * - Selección de mapa
+ * - Salir del programa
+ */
 int mostrar_menu_principal()
 {
+    // Definir las opciones del menú principal
     OpcionMenuPrincipal opciones[MENU_PRINCIPAL_ITEMS] = {
         {"Juego (demo)", "Demostración básica del juego con mapa fijo", ejecutar_base},
-        {"Buscar Partidas reales", "Conectar a catacumabs disponibles", buscar_catacumbas_disponibles},
+        {"Buscar Partidas reales", "Conectar a catacumbas disponibles", buscar_catacumbas_disponibles},
         {"Selección de Rol", "Elegir entre Explorador y Guardián", ejecutar_seleccion_rol},
         {"Selección de Mapa", "Interfaz para seleccionar mapas disponibles", ejecutar_seleccion_mapa},
-        {"Salir", "Cerrar la aplicación", NULL}};
+        {"Salir", "Cerrar la aplicación", NULL}
+    };
 
     int seleccion = 0;
     int ch;
     int max_y, max_x;
 
+    // Inicializar ncurses
     initscr();
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
     curs_set(0);
 
+    // Configurar colores si están disponibles
     if (has_colors())
     {
         start_color();
@@ -472,6 +521,7 @@ int mostrar_menu_principal()
         init_pair(5, COLOR_YELLOW, COLOR_BLACK);
     }
 
+    // Bucle principal del menú
     while (1)
     {
         getmaxyx(stdscr, max_y, max_x);
@@ -573,6 +623,20 @@ int mostrar_menu_principal()
     }
 }
 
+// ============================================================================
+// FUNCIÓN PRINCIPAL DEL PROGRAMA
+// ============================================================================
+
+/**
+ * @brief Función principal del programa cliente de catacumbas
+ * @return 0 si la ejecución es exitosa
+ * 
+ * Punto de entrada del programa que:
+ * 1. Muestra un mensaje de bienvenida
+ * 2. Inicia el menú principal del sistema
+ * 3. Maneja el resultado de la ejecución
+ * 4. Muestra un mensaje de despedida
+ */
 int main()
 {
     printf("Iniciando Menu Principal de Catacumbas...\n");
@@ -588,34 +652,59 @@ int main()
     return 0;
 }
 
+// ============================================================================
+// FUNCIONES DE EJECUCIÓN DE OPCIONES DEL MENÚ
+// ============================================================================
+
+/**
+ * @brief Ejecuta la selección de rol del jugador
+ * @return El tipo de jugador seleccionado (RAIDER o GUARDIAN)
+ * 
+ * Permite al usuario elegir entre ser un explorador (raider)
+ * o un guardián, actualizando las variables globales correspondientes.
+ */
 int ejecutar_seleccion_rol()
 {
     int resultado = mostrar_menu_rol();
 
     switch (resultado)
     {
-    case 'E':
+    case RAIDER:
         set_game_role("EXPLORADOR");
-        player_character = 'E';
+        setPlayChar(RAIDER);
         break;
-    case 'G':
+    case GUARDIAN:
         set_game_role("GUARDIAN");
-        player_character = 'G';
+        setPlayChar(GUARDIAN);
         break;
     default:
         set_game_role("NO SELECCIONADO");
-        player_character = 'E';
+        setPlayChar(RAIDER);
         break;
     }
 
     return resultado;
 }
 
+/**
+ * @brief Ejecuta la selección de mapa desde el directorio
+ * @return Índice del mapa seleccionado o estado de la operación
+ * 
+ * Delega la funcionalidad de selección de mapa al sistema
+ * de listado que se conecta al directorio de servidores.
+ */
 int ejecutar_seleccion_mapa()
 {
     return mostrar_listado_mapas_y_seleccionar();
 }
 
+/**
+ * @brief Ejecuta el modo demo del juego
+ * @return Resultado de la ejecución del demo
+ * 
+ * Lanza el modo de demostración del juego con un mapa fijo,
+ * cerrando temporalmente ncurses para la ejecución.
+ */
 int ejecutar_base()
 {
     endwin();
@@ -625,13 +714,35 @@ int ejecutar_base()
     return resultado;
 }
 
+/**
+ * @brief Establece el carácter que representa al jugador
+ * @param c Carácter del tipo de jugador (RAIDER o GUARDIAN)
+ * 
+ * Actualiza la variable global que define cómo se representa
+ * visualmente el jugador en el mapa de juego.
+ */
 void setPlayChar(char c)
 {
     player_character = c;
 }
 
+/**
+ * @brief Muestra el listado de mapas disponibles y permite seleccionar uno
+ * @return Índice del mapa seleccionado o 0 en caso de error
+ * 
+ * Esta función:
+ * 1. Se conecta al directorio de servidores
+ * 2. Solicita la lista de catacumbas disponibles
+ * 3. Procesa la respuesta y crea una estructura de mapas
+ * 4. Presenta la lista al usuario para selección
+ * 5. Actualiza las variables globales con el mapa seleccionado
+ * 
+ * Maneja todos los errores de comunicación y presenta mensajes
+ * informativos al usuario en caso de problemas.
+ */
 int mostrar_listado_mapas_y_seleccionar()
 {
+    // Conectar a los mailboxes del directorio
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
 
@@ -645,6 +756,7 @@ int mostrar_listado_mapas_y_seleccionar()
         return 0;
     }
 
+    // Preparar solicitud de listado
     struct solicitud msg;
     struct respuesta resp;
     pid_t mi_pid = getpid();
@@ -653,6 +765,7 @@ int mostrar_listado_mapas_y_seleccionar()
     msg.tipo = OP_LISTAR;
     msg.texto[0] = '\0';
 
+    // Enviar solicitud al directorio
     if (msgsnd(mailbox_solicitudes, &msg, sizeof(msg) - sizeof(long), 0) == -1)
     {
         endwin();
@@ -663,6 +776,7 @@ int mostrar_listado_mapas_y_seleccionar()
         return 0;
     }
 
+    // Recibir respuesta del directorio
     if (msgrcv(mailbox_respuestas, &resp, sizeof(resp) - sizeof(long), mi_pid, 0) == -1)
     {
         endwin();
@@ -673,21 +787,25 @@ int mostrar_listado_mapas_y_seleccionar()
         return 0;
     }
 
+    // Procesar respuesta exitosa
     if (resp.codigo == RESP_OK)
     {
         Map maps[20];
         int num_maps = 0;
         char *saveptr1, *saveptr2;
+        
+        // Parsear la cadena de respuesta con información de catacumbas
         char *catacumba = strtok_r(resp.datos, ";", &saveptr1);
         while (catacumba && num_maps < 20)
         {
             char *nombre = strtok_r(catacumba, "|", &saveptr2);
             char *direccion = strtok_r(NULL, "|", &saveptr2);
-            strtok_r(NULL, "|", &saveptr2);
+            strtok_r(NULL, "|", &saveptr2);  // Saltar campo no usado
             char *mailbox_str = strtok_r(NULL, "|", &saveptr2);
             char *cantJug = strtok_r(NULL, "|", &saveptr2);
             char *maxJug = strtok_r(NULL, "|", &saveptr2);
 
+            // Validar que todos los campos estén presentes
             if (nombre && direccion && mailbox_str && cantJug && maxJug)
             {
                 strncpy(maps[num_maps].nombre, nombre, sizeof(maps[num_maps].nombre) - 1);
@@ -702,6 +820,7 @@ int mostrar_listado_mapas_y_seleccionar()
             catacumba = strtok_r(NULL, ";", &saveptr1);
         }
 
+        // Verificar que haya mapas disponibles
         if (num_maps == 0)
         {
             endwin();
@@ -731,252 +850,4 @@ int mostrar_listado_mapas_y_seleccionar()
         initscr();
         return 0;
     }
-}
-
-int inicializar_memoria_mapa()
-{
-    fd = shm_open(selected_shm_path, O_RDONLY, 0666);
-    if (fd == -1)
-    {
-        endwin();
-        perror("Error abriendo memoria compartida del mapa");
-        printf("Presiona Enter para continuar...");
-        getchar();
-        initscr();
-        return -1;
-    }
-    size_t size = FILAS * COLUMNAS;
-    mapa = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
-    if (mapa == MAP_FAILED)
-    {
-        endwin();
-        perror("Error mapeando memoria compartida del mapa");
-        printf("Presiona Enter para continuar...");
-        getchar();
-        initscr();
-        close(fd);
-        return -1;
-    }
-    close(fd);
-    return 0;
-}
-
-/* void buscar_posicion_inicial(const char *mapa, int *jugador_x, int *jugador_y)
-{
-    for (int y = 0; y < FILAS; y++)
-    {
-        for (int x = 0; x < COLUMNAS; x++)
-        {
-            if (mapa[y * COLUMNAS + x] == ' ')
-            {
-                *jugador_y = y;
-                *jugador_x = x;
-                return;
-            }
-        }
-    }
-} */
-
-int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y)
-{
-    if (destino == '#')
-    {
-        return 0;
-    }
-    if (destino == '$')
-    {
-        if (player_character == 'E') {
-            mvprintw(FILAS + 1, 0, "Tesoro recogido!");
-            refresh();
-            sleep(0.2);
-            // Notificar al servidor que se encontró un tesoro
-            notificar_evento_juego(ST_TREASURE_FOUND, "¡Tesoro encontrado!");
-        } else {
-            mvprintw(FILAS + 1, 0, "¡Solo los exploradores pueden recoger tesoros!");
-            refresh();
-            sleep(0.5);
-            return 0; // Bloquea el movimiento del guardián sobre el tesoro
-        }
-    }
-    // Lógica de colisión entre jugadores
-    if ((player_character == 'G' && destino == 'E')) {
-        // Guardián captura a raider
-        mvprintw(FILAS + 1, 0, "¡Has capturado a un raider!");
-        refresh();
-        sleep(0.2);
-        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Guardian ha atrapado a un raider!");
-        *jugador_x = new_x;
-        *jugador_y = new_y;
-        return 1; // Permite el movimiento del guardián
-    } else if (player_character == 'E' && destino == 'G') {
-        // Raider es capturado por guardián
-        mvprintw(FILAS + 1, 0, "¡Has sido atrapado por un guardián!");
-        refresh();
-        sleep(0.2);
-        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Has sido atrapado!");
-        return 0; // Bloquea el movimiento del raider
-    } else if ((player_character == 'E' && destino == 'E') || (player_character == 'G' && destino == 'G')) {
-        // Colisión entre jugadores del mismo tipo
-        mvprintw(FILAS + 1, 0, "Colisión con otro jugador del mismo tipo!");
-        refresh();
-        sleep(0.2);
-        return 0;
-    }
-    *jugador_x = new_x;
-    *jugador_y = new_y;
-    return 1;
-}
-
-
-void mostrar_pantalla_victoria_tesoros() {
-    clear();
-    attron(COLOR_PAIR(2) | A_BOLD);
-    mvprintw(FILAS / 2, (COLUMNAS - 35) / 2, "¡No hay más tesoros, los exploradores ganan!");
-    attroff(COLOR_PAIR(2) | A_BOLD);
-    attron(COLOR_PAIR(5));
-    mvprintw(FILAS / 2 + 2, (COLUMNAS - 25) / 2, "Presiona cualquier tecla...");
-    attroff(COLOR_PAIR(5));
-    refresh();
-    getch();
-}
-
-void jugar()
-{
-    if (has_colors()) {
-        start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-        init_pair(2, COLOR_RED, COLOR_YELLOW);
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-    }
-
-    if (conectar_al_servidor() != 0) {
-        mvprintw(FILAS + 3, 0, "Error: No se pudo conectar al servidor");
-        refresh();
-        getch();
-        return;
-    }
-
-    if (inicializar_memoria_mapa() != 0)
-        return;
-
-    int mailbox_solicitudes_id = msgget(selected_mailbox, 0666);
-    int mailbox_respuestas = msgget(key_respuestas_global, 0666);
-    int jugador_x = 1, jugador_y = 1;/* 
-    buscar_posicion_inicial(mapa, &jugador_x, &jugador_y); */
-
-    int ch;
-    keypad(stdscr, TRUE);
-    curs_set(0);
-    timeout(100); // getch() no bloqueante, revisa cada 100ms
-
-    int fin_partida = 0;
-    while (!fin_partida) {
-        ch = getch();
-        if (ch == 'q') break;
-
-        int new_x = jugador_x, new_y = jugador_y;
-        if (ch == KEY_UP) new_y--;
-        if (ch == KEY_DOWN) new_y++;
-        if (ch == KEY_LEFT) new_x--;
-        if (ch == KEY_RIGHT) new_x++;
-
-        if (new_y < 0 || new_y >= FILAS || new_x < 0 || new_x >= COLUMNAS)
-            continue;
-
-        char destino = mapa[new_y * COLUMNAS + new_x];
-
-        if (procesar_movimiento(destino, &jugador_x, &jugador_y, new_x, new_y)) {
-            enviar_movimiento_al_servidor(jugador_x, jugador_y, key_respuestas_global, mailbox_solicitudes_id);
-        }
-
-        // Revisar eventos del servidor en el mailbox de respuestas del cliente
-        struct status_msg evento;
-        if (mailbox_respuestas != -1) {
-            // No bloqueante: IPC_NOWAIT
-            if (msgrcv(mailbox_respuestas, &evento, sizeof(evento) - sizeof(long), TYPE_GAME_EVENT, IPC_NOWAIT) != -1) {
-                if (evento.code == ST_ALL_TREASURES) {
-                    mostrar_pantalla_victoria_tesoros();
-                    fin_partida = 1;
-                }
-            }
-        }
-
-        dibujar_mapa_coloreado();
-    }
-
-    desconectar_del_servidor();
-}
-
-void terminarPartida(int posicion_x, int posicion_y) {
-    endwin();
-    munmap(mapa, FILAS * (COLUMNAS + 1));
-    desconectar_servidor();
-    close(fd);
-}
-
-
-void dibujar_mapa_coloreado()
-{
-    attron(COLOR_PAIR(4));
-    mvprintw(1, 2, "=== MAPA DE CATACUMBAS ===");
-    attroff(COLOR_PAIR(4));
-
-    for (int y = 0; y < FILAS; y++)
-    {
-        for (int x = 0; x < COLUMNAS; x++)
-        {
-            char c = mapa[y * COLUMNAS + x];
-            if (c == '#' || c == CELDA_PARED)
-            {
-                attron(COLOR_PAIR(1));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(1));
-            }
-            else if (c == '$' || c == CELDA_TESORO)
-            {
-                attron(COLOR_PAIR(2));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(2));
-            }
-            else if (c == ' ' || c == CELDA_VACIA)
-            {
-                attron(COLOR_PAIR(3));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(3));
-            }
-            else if (c == 'E' || c == 'A' || c == 'J' || c == CELDA_EXPLORADOR || c == CELDA_GUARDIAN)
-            {
-                attron(COLOR_PAIR(2) | A_BOLD);
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(2) | A_BOLD);
-            }
-            else
-            {
-                mvaddch(y + 4, x + 2, c);
-            }
-        }
-    }
-/* 
-    attron(COLOR_PAIR(2) | A_BOLD);
-    mvaddch(jugador_y + 4, jugador_x + 2, playerChar);
-    attroff(COLOR_PAIR(2) | A_BOLD);
- */
-    attron(COLOR_PAIR(5));
-    mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
-    attroff(COLOR_PAIR(5));
-
-    refresh();
-}
-
-
-void notificar_evento_juego(int code, const char *texto) {
-    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
-    struct status_msg msg;
-    msg.mtype = TYPE_GAME_EVENT;
-    msg.code = code;
-    strncpy(msg.text, texto, MAX_MSG-1);
-    msg.text[MAX_MSG-1] = '\0';
-    msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
 }
