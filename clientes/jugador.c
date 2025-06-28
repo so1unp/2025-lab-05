@@ -37,6 +37,7 @@
 #include <signal.h>
 #include "status.h"
 
+extern void mostrar_game_over();
 // ============================================================================
 // VARIABLES GLOBALES COMPARTIDAS (definidas en main.c)
 // ============================================================================
@@ -363,13 +364,22 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
         return 0;
     }
     
-    // Manejo de tesoros
+      // Manejo de tesoros
     if (destino == TESORO)
     {
         if (player_character == RAIDER) {
             // Los raiders pueden recoger tesoros
-            notificar_evento_juego(TESORO_CAPTURADO, "¡Tesoro encontrado!");
-            enviar_captura_tesoro_al_servidor(new_x, new_y, key_respuestas_global, mailbox_solicitudes_id_global);
+            // Enviar mensaje TESORO_CAPTURADO al servidor
+            struct SolicitudServidor solicitud;
+            solicitud.mtype = getpid();
+            solicitud.codigo = TESORO_CAPTURADO;
+            solicitud.clave_mailbox_respuestas = key_respuestas_global;
+            solicitud.fila = new_y;
+            solicitud.columna = new_x;
+            solicitud.tipo = player_character;
+            // Enviar al mailbox del servidor
+            msgsnd(mailbox_solicitudes_id_global, &solicitud, sizeof(solicitud) - sizeof(long), 0);
+
         } else {
             // Los guardianes no pueden moverse sobre tesoros
             return 0;
@@ -379,13 +389,20 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     // Lógica de colisión entre jugadores
     if ((player_character == GUARDIAN && destino == RAIDER)) {
         // Guardián captura a raider
-        notificar_evento_juego(RAIDER_CAPTURADO, "¡Guardian ha atrapado a un raider!");
+        struct SolicitudServidor solicitud;
+        solicitud.mtype = getpid();
+        solicitud.codigo = RAIDER_CAPTURADO;
+        solicitud.clave_mailbox_respuestas = key_respuestas_global;
+        solicitud.fila = new_y;
+        solicitud.columna = new_x;
+        solicitud.tipo = player_character;
+        msgsnd(mailbox_solicitudes_id_global, &solicitud, sizeof(solicitud) - sizeof(long), 0);
+
         *jugador_x = new_x;
         *jugador_y = new_y;
         return 1;
     } else if (player_character == RAIDER && destino == GUARDIAN) {
         // Raider es capturado por guardián
-        notificar_evento_juego(RAIDER_CAPTURADO, "¡Has sido atrapado!");
         return 0;
     } else if ((player_character == RAIDER && destino == RAIDER) || 
                (player_character == GUARDIAN && destino == GUARDIAN)) {
@@ -410,7 +427,7 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
 void notificar_evento_juego(int code, const char *texto) {
     int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
     struct status_msg msg;
-    msg.mtype = TYPE_GAME_EVENT;
+    msg.mtype = TYPE_GAME_EVENT;    //fijate pa esto no lo usamos
     msg.code = code;
     strncpy(msg.text, texto, MAX_MSG-1);
     msg.text[MAX_MSG-1] = '\0';
@@ -561,10 +578,10 @@ void *hilo_entrada(void *arg) {
         if (mailbox_respuestas_global != -1) {
             if (msgrcv(mailbox_respuestas_global, &evento, sizeof(evento) - sizeof(long), getpid(), IPC_NOWAIT) != -1) {
                 if (evento.codigo == MUERTO) {
+                    running = 0; // Detener el hilo de refresco
                     pthread_mutex_unlock(&pos_mutex);
-                    mostrar_pantalla_derrota();
+                    mostrar_game_over();
                     fin_partida = 1;
-                    running = 0;
                     break;
                 }
             }
