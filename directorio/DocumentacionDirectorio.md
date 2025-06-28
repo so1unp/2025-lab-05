@@ -1,12 +1,65 @@
 # 📚 Documentación del Sistema de Directorio de Catacumbas
 
+## 🔧 Estructura Modular del Proyecto
+
+Este proyecto ha sido **modularizado** para mejorar la organización del código y facilitar el mantenimiento. El código del servidor se ha dividido en varios módulos especializados.
+
+### 📁 Estructura del Proyecto
+
+```
+directorio/
+├── directorio.h              # Archivo de cabecera principal (sin cambios)
+├── Makefile                  # Makefile actualizado para compilación modular
+├── server_original.c         # Respaldo del archivo original monolítico
+├── clienteD.c               # Cliente del directorio (sin cambios)
+├── server                   # Ejecutable del servidor modular
+├── clienteD                 # Ejecutable del cliente de debug
+└── src/                     # Directorio de código fuente modular
+    ├── main.c               # Función principal y bucle del servidor
+    ├── comunicacion.c/h     # Manejo de comunicación IPC (mailboxes)
+    ├── operaciones.c/h      # Operaciones CRUD de catacumbas
+    ├── persistencia.c/h     # Carga y guardado de datos
+    ├── senales.c/h          # Manejo de señales de sistema
+    └── ping.c/h             # Monitoreo de estado de catacumbas
+```
+
+### 📦 Módulos del Sistema
+
+| Módulo           | Archivo            | Responsabilidad                                        |
+| ---------------- | ------------------ | ------------------------------------------------------ |
+| **Principal**    | `main.c`           | Función principal, inicialización y bucle del servidor |
+| **Comunicación** | `comunicacion.c/h` | Manejo de solicitudes y respuestas con message queues  |
+| **Operaciones**  | `operaciones.c/h`  | CRUD de catacumbas (listar, agregar, buscar, eliminar) |
+| **Persistencia** | `persistencia.c/h` | Carga y guardado de datos en archivo                   |
+| **Señales**      | `senales.c/h`      | Manejo de SIGINT/SIGTERM y terminación limpia          |
+| **Ping**         | `ping.c/h`         | Monitoreo periódico del estado de catacumbas           |
+
+
+### 🔨 Compilación Modular
+
+```bash
+# Compilar todo el proyecto
+make
+
+# Compilar solo el servidor
+make server
+
+# Limpiar archivos compilados
+make clean
+
+# Ver información del proyecto
+make info
+```
+
+---
+
 ## 🏗️ Arquitectura del Sistema
 
 El sistema de directorio de catacumbas utiliza **colas de mensajes (message queues)** para la comunicación IPC entre el servidor y los clientes.
 
 ### Componentes principales:
-- **Servidor (`server.c`)**: Mantiene el directorio centralizado de catacumbas
-- **Cliente de prueba (`clienteD.c`)**: Interfaz para interactuar con el directorio
+- **Servidor (`server`)**: Mantiene el directorio centralizado de catacumbas
+- **Cliente de prueba (`clienteD`)**: Interfaz para interactuar con el directorio
 - **Cabeceras (`directorio.h`)**: Definiciones compartidas
 
 ---
@@ -25,6 +78,95 @@ struct catacumba {
     int cantMaxJug;               // Cantidad máxima de jugadores permitidos
 };
 ```
+
+---
+
+## 🧩 Funciones por Módulo
+
+### 📡 Módulo de Comunicación (`comunicacion.c/h`)
+```c
+void RecibirSolicitudes(int *recibido, int mailbox_solicitudes_id, struct solicitud *msg);
+void enviarRespuesta(int mailbox_respuestas_id, struct respuesta *resp);
+```
+- **Propósito**: Manejo de solicitudes y respuestas con message queues
+- **Funciones**: Recepción y envío de mensajes entre cliente y servidor
+
+### 🔧 Módulo de Operaciones (`operaciones.c/h`)
+```c
+void listarCatacumbas(struct respuesta *resp, struct catacumba catacumbas[], int *num_catacumbas);
+void agregarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp);
+void buscarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp);
+void eliminarCatacumba(struct catacumba catacumbas[], int *num_catacumbas, struct solicitud *msg, struct respuesta *resp);
+```
+- **Propósito**: Operaciones CRUD sobre el directorio de catacumbas
+- **Funciones**: Listar, agregar, buscar y eliminar catacumbas
+
+### 💾 Módulo de Persistencia (`persistencia.c/h`)
+```c
+int cargarCatacumbas(struct catacumba catacumbas[], int *num_catacumbas);
+int guardarCatacumbas(struct catacumba catacumbas[], int num_catacumbas);
+```
+- **Propósito**: Manejo de persistencia de datos
+- **Funciones**: Carga y guardado de catacumbas en archivo binario
+
+### 🚨 Módulo de Señales (`senales.c/h`)
+```c
+void configurarManejoSenales(void);
+void manejarSenalTerminacion(int sig);
+void limpiarMailboxes(void);
+void establecer_mailbox_solicitudes(int id);
+void establecer_mailbox_respuestas(int id);
+void establecer_catacumbas_globales(struct catacumba *catacumbas, int *num_catacumbas);
+```
+- **Propósito**: Manejo de señales del sistema y terminación limpia
+- **Funciones**: Configuración de manejadores SIGINT/SIGTERM y limpieza de recursos
+
+### 📊 Módulo de Ping (`ping.c/h`)
+```c
+int procesoActivo(int pid);
+void estadoServidor(struct catacumba catacumbas[], int *num_catacumbas);
+void *hiloPing(void *arg);
+int leerEstadoCatacumba(struct catacumba *catacumba);
+```
+- **Propósito**: Monitoreo periódico del estado de catacumbas
+- **Funciones**: Verificación de procesos activos y actualización de estadísticas
+
+#### 🔍 Sistema de Detección de Procesos
+El módulo de ping implementa un sistema robusto para detectar si los procesos de catacumbas están activos, independientemente del usuario que los haya iniciado:
+
+**Función `procesoActivo(int pid)`:**
+```c
+int procesoActivo(int pid)
+{
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    // Verificar si existe el directorio /proc/PID
+    if (access(proc_path, F_OK) == 0)
+    {
+        return 1; // El proceso existe
+    }
+    else
+    {
+        return 0; // El proceso no existe
+    }
+}
+```
+
+**Ventajas del nuevo enfoque:**
+- **✅ Detección universal**: Puede detectar procesos de cualquier usuario
+- **✅ Mayor robustez**: Utiliza el sistema de archivos `/proc` que refleja el estado real del kernel
+- **✅ Sin permisos especiales**: No requiere privilegios adicionales
+- **✅ Estándar POSIX**: Compatible con todos los sistemas Unix/Linux
+
+**Comparación con el método anterior:**
+- **Método anterior**: `kill(pid, 0)` - Solo funciona para procesos del mismo usuario
+- **Método actual**: `access("/proc/PID", F_OK)` - Funciona para procesos de cualquier usuario
+
+**Frecuencia de monitoreo:**
+- El hilo de ping ejecuta verificaciones cada `FRECUENCIA_PING` segundos (5 segundos por defecto, definido en `directorio.h`)
+- Utiliza mutex para acceso seguro a los datos compartidos entre hilos
+- Elimina automáticamente catacumbas cuyos procesos ya no están activos
 
 ---
 
@@ -71,14 +213,34 @@ struct catacumba {
 
 ## 🚀 Compilación y Ejecución
 
-### Compilar el Servidor:
+### Compilación Modular:
 ```bash
-gcc -Wall -Wextra -o server server.c
+# Compilar todo el sistema (recomendado)
+make
+
+# Compilar solo el servidor modular
+make server
+
+# Compilar solo el cliente de debug
+make clienteD
+
+# Limpiar archivos compilados
+make clean
+
+# Ver información de la estructura modular
+make info
 ```
 
-### Compilar el Cliente:
+### Compilación Manual (si es necesario):
 ```bash
-gcc -Wall -Wextra -o clienteD clienteD.c
+# Servidor modular (con todos los módulos)
+gcc -std=c99 -Wall -Wextra -o server \
+    src/main.c src/comunicacion.c src/operaciones.c \
+    src/persistencia.c src/senales.c src/ping.c \
+    -pthread
+
+# Cliente de debug
+gcc -std=c99 -Wall -Wextra -o clienteD clienteD.c -pthread
 ```
 
 ### Ejecutar:
@@ -151,36 +313,6 @@ MiCatacumba|/tmp/catacumba1.dat|/tmp/props1.dat|mailbox1|0|0;OtraCat|/tmp/cat2.d
 
 ---
 
-## 🔍 Notas Técnicas
-
-### Cambios recientes:
-- ✅ **Nuevo campo**: `propCatacumba` agregado a la estructura
-- ✅ **Formato actualizado**: Ahora requiere 4 campos para agregar
-- ✅ **Persistencia completa**: El nuevo campo se guarda automáticamente
-- ✅ **Cliente actualizado**: Interfaz de usuario adaptada al nuevo formato
-
-### Compatibilidad:
-- ⚠️ **Archivos de persistencia antiguos**: No son compatibles con la nueva estructura
-- 🔄 **Migración**: Eliminar `catacumbas_persistidas.dat` antes de usar la nueva versión
-
----
-
-## 🐛 Solución de Problemas
-
-### Error "No such file or directory" en mailboxes:
-- **Causa**: El servidor no está ejecutándose
-- **Solución**: Iniciar `./server` antes que el cliente
-
-### Error de formato en agregar catacumba:
-- **Causa**: Faltan campos en la entrada
-- **Formato correcto**: `nombre|direccion|propiedades|mailbox`
-
-### Error de límite alcanzado:
-- **Causa**: Se alcanzó el máximo de 10 catacumbas
-- **Solución**: Eliminar catacumbas existentes o aumentar `MAX_CATACUMBAS`
-
----
-
 ## 📚 Sistema de Comunicación IPC
 
 ### Mailboxes utilizados:
@@ -209,8 +341,111 @@ msgrcv(mailbox_respuestas, &resp, ..., mi_pid, 0);  // Filtrar por PID
 
 ---
 
-*Documentación actualizada - Versión con soporte completo para propiedades de catacumbas*
-- **Con filtro PID** (`msgrcv(..., mi_pid, ...)`): Solo recibe sus propias respuestas
+## 🔍 Sistema de Ping: Implementación Técnica
+
+### Descripción General
+El sistema de ping es un componente crítico que ejecuta en un hilo separado para monitorear continuamente el estado de todas las catacumbas registradas. Su propósito principal es detectar automáticamente cuando los procesos de catacumbas se terminan y eliminarlos del directorio.
+
+### Arquitectura del Sistema
+
+#### 1. **Hilo de Ping (`hiloPing`)**
+```c
+void *hiloPing(void *arg)
+{
+    struct ping_params *params = (struct ping_params *)arg;
+    
+    while (servidor_activo)
+    {
+        sleep(FRECUENCIA_PING);
+        
+        pthread_mutex_lock(&mutex_catacumbas);
+        estadoServidor(params->catacumbas, params->num_catacumbas);
+        pthread_mutex_unlock(&mutex_catacumbas);
+    }
+    
+    return NULL;
+}
+```
+
+**Características:**
+- **Ejecución periódica**: Cada `FRECUENCIA_PING` segundos (5 segundos por defecto)
+- **Thread-safe**: Utiliza mutex para proteger acceso a datos compartidos
+- **No bloqueante**: Permite al servidor continuar operando normalmente
+
+#### 2. **Detección de Procesos (`procesoActivo`)**
+
+**Implementación actual:**
+```c
+int procesoActivo(int pid)
+{
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    if (access(proc_path, F_OK) == 0)
+        return 1; // El proceso existe
+    else
+        return 0; // El proceso no existe
+}
+```
+
+**¿Por qué este enfoque?**
+
+| Aspecto          | `kill(pid, 0)` (anterior)               | `access("/proc/PID", F_OK)` (actual)       |
+| ---------------- | --------------------------------------- | ------------------------------------------ |
+| **Alcance**      | Solo procesos del mismo usuario         | Todos los procesos del sistema             |
+| **Permisos**     | Requiere permisos sobre el proceso      | Solo lectura del sistema de archivos       |
+| **Portabilidad** | POSIX estándar                          | Linux/Unix específico pero universal       |
+| **Robustez**     | Falla con permisos insuficientes        | Siempre funciona si `/proc` está montado   |
+| **Casos de uso** | Servidor y catacumbas del mismo usuario | Catacumbas iniciadas por cualquier usuario |
+
+#### 3. **Verificación de Estado (`estadoServidor`)**
+
+**Algoritmo de verificación:**
+1. **Iteración**: Recorre todas las catacumbas registradas
+2. **Verificación**: Llama a `procesoActivo(pid)` para cada catacumba
+3. **Actualización**: Si está activa, lee su estado desde memoria compartida
+4. **Eliminación**: Si no está activa, la elimina del array y actualiza persistencia
+5. **Reporte**: Muestra resumen con estadísticas de catacumbas activas/eliminadas
+
+**Manejo de eliminaciones:**
+```c
+// Eliminación segura con reordenamiento
+for (int j = i; j < *num_catacumbas - 1; j++)
+{
+    strcpy(catacumbas[j].nombre, catacumbas[j + 1].nombre);
+    strcpy(catacumbas[j].direccion, catacumbas[j + 1].direccion);
+    // ... copiar resto de campos
+}
+(*num_catacumbas)--;
+i--; // Revisar el mismo índice debido al reordenamiento
+```
+
+#### 4. **Lectura de Estado (`leerEstadoCatacumba`)**
+
+**Acceso a memoria compartida:**
+```c
+int leerEstadoCatacumba(struct catacumba *catacumba)
+{
+    int fd = shm_open(catacumba->propCatacumba, O_RDONLY, 0666);
+    if (fd == -1) return -1;
+    
+    struct Estado *estado_ptr = mmap(NULL, sizeof(struct Estado),
+                                   PROT_READ, MAP_SHARED, fd, 0);
+    if (estado_ptr == MAP_FAILED) {
+        close(fd);
+        return -1;
+    }
+    
+    // Actualizar información de jugadores
+    catacumba->cantJug = estado_ptr->cant_jugadores;
+    catacumba->cantMaxJug = estado_ptr->max_jugadores;
+    
+    munmap(estado_ptr, sizeof(struct Estado));
+    close(fd);
+    return 0;
+}
+```
+---
 
 ## Códigos de Ejemplo
 
@@ -322,54 +557,4 @@ void parsearListaCatacumbas(char *datos) {
 }
 ```
 
-## Compilación y Ejecución
-
-### Compilar el sistema
-
-```bash
-# Compilar el servidor
-make server
-
-# Compilar el cliente de debug
-make clienteD
-```
-
-### Ejecutar el sistema
-
-```bash
-# 1. Ejecutar el servidor en segundo plano
-./server &
-
-# 2. Ejecutar el cliente de debug
-./clienteD
-
-# 3. Para finalizar el servidor
-killall server
-```
-
-## Consideraciones Importantes
-
-### Concurrencia
-- El servidor procesa solicitudes de manera **secuencial** (una a la vez)
-- Múltiples clientes pueden conectarse **simultáneamente**
-- Las respuestas se entregan al cliente correcto usando su PID
-
-### Limitaciones
-- Máximo `MAX_CATACUMBAS` catacumbas (definido en `directorio.h`)
-- Tamaño máximo de texto: `MAX_TEXT` caracteres
-- Tamaño máximo de datos de respuesta: `MAX_DAT_RESP` caracteres
-- Nombres de catacumba: máximo `MAX_NOM` caracteres
-- Rutas de directorio: máximo `MAX_RUTA` caracteres
-
-### Formato de Datos
-- **Separador de campos**: `|` (pipe)
-- **Separador de registros**: `;` (punto y coma)
-- **Campos obligatorios**: Todos los campos son requeridos
-- **Validación de jugadores**: cantJug >= 0, maxJug > 0, cantJug <= maxJug
-
-### Códigos de Respuesta Extendidos
-- `RESP_OK`: Operación exitosa
-- `RESP_ERROR`: Error general en la operación
-- `RESP_NO_ENCONTRADO`: Catacumba no encontrada
-- `RESP_LIMITE_ALCANZADO`: Máximo de catacumbas alcanzado
 

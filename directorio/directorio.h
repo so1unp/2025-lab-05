@@ -39,6 +39,9 @@
 /** @brief Archivo de configuración del directorio */
 #define ARCHIVO_CONFIG "directorio_config.txt"
 
+/** @brief Frecuencia de ping a catacumbas en segundos */
+#define FRECUENCIA_PING 5
+
 // ==================== CÓDIGOS DE OPERACIÓN ====================
 // Estos códigos identifican qué operación quiere realizar el cliente
 
