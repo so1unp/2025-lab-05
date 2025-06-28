@@ -33,7 +33,6 @@
 #include <ncurses.h>
 #include "../directorio/directorio.h"
 #include "../catacumbas/catacumbas.h"
-#include "status.h"
 
 // ============================================================================
 // CONSTANTES DEL MENU PRINCIPAL

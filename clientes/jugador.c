@@ -362,6 +362,17 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     {
         if (player_character == RAIDER) {
             // Los raiders pueden recoger tesoros
+            // Enviar mensaje TESORO_CAPTURADO al servidor
+            struct SolicitudServidor solicitud;
+            solicitud.mtype = getpid();
+            solicitud.codigo = TESORO_CAPTURADO;
+            solicitud.clave_mailbox_respuestas = key_respuestas_global;
+            solicitud.fila = new_y;
+            solicitud.columna = new_x;
+            solicitud.tipo = player_character;
+            // Enviar al mailbox del servidor
+            msgsnd(mailbox_solicitudes_id_global, &solicitud, sizeof(solicitud) - sizeof(long), 0);
+
             notificar_evento_juego(ST_TREASURE_FOUND, "¡Tesoro encontrado!");
         } else {
             // Los guardianes no pueden moverse sobre tesoros
@@ -372,6 +383,15 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     // Lógica de colisión entre jugadores
     if ((player_character == GUARDIAN && destino == RAIDER)) {
         // Guardián captura a raider
+        struct SolicitudServidor solicitud;
+        solicitud.mtype = getpid();
+        solicitud.codigo = RAIDER_CAPTURADO;
+        solicitud.clave_mailbox_respuestas = key_respuestas_global;
+        solicitud.fila = new_y;
+        solicitud.columna = new_x;
+        solicitud.tipo = player_character;
+        msgsnd(mailbox_solicitudes_id_global, &solicitud, sizeof(solicitud) - sizeof(long), 0);
+
         notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Guardian ha atrapado a un raider!");
         *jugador_x = new_x;
         *jugador_y = new_y;
