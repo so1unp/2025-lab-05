@@ -6,7 +6,7 @@
 #define PARED '#'
 #define VACIO ' '
 #define TESORO '$'
-#define RAIDER 'R'
+#define RAIDER 'E'
 #define GUARDIAN 'G'
 
 // TAMAÑOS MÁXIMOS (restricciones de configuraciones)
