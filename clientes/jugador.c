@@ -611,7 +611,7 @@ void *hilo_entrada(void *arg) {
 void dibujar_mapa_coloreado()
 {
     clear(); // Limpiar pantalla
-    
+
     // Título del juego
     attron(COLOR_PAIR(4));
     mvprintw(1, 2, "=== MAPA DE CATACUMBAS === ROL: %s", selected_role);
@@ -622,8 +622,16 @@ void dibujar_mapa_coloreado()
     {
         for (int x = 0; x < COLUMNAS; x++)
         {
+            // Si es la posición del jugador local, mostrar 'J'
+            if (y == jugador_y_global && x == jugador_x_global) {
+                attron(COLOR_PAIR(2) | A_BOLD);
+                mvaddch(y + 4, x + 2, 'J');
+                attroff(COLOR_PAIR(2) | A_BOLD);
+                continue;
+            }
+
             char c = mapa[y * COLUMNAS + x];
-            
+
             // Aplicar colores según el tipo de celda
             if (c == PARED)
             {
@@ -645,6 +653,7 @@ void dibujar_mapa_coloreado()
             }
             else if (c == RAIDER || c == GUARDIAN)
             {
+                // Otros jugadores: mostrar su letra de rol
                 attron(COLOR_PAIR(2) | A_BOLD);
                 mvaddch(y + 4, x + 2, c);
                 attroff(COLOR_PAIR(2) | A_BOLD);
@@ -660,13 +669,8 @@ void dibujar_mapa_coloreado()
     attron(COLOR_PAIR(5));
     mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     mvprintw(FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
-
-    // Mostrar contador de tesoros
-    int tesoros = contar_tesoros_restantes();
-    mvprintw(FILAS + 8, 2, "Tesoros restantes: %d", tesoros);
-
     attroff(COLOR_PAIR(5));
-    
+
     refresh();
 }
 
