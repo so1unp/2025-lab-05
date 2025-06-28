@@ -100,6 +100,10 @@ void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mai
 /** @brief Inicializa la memoria compartida del mapa */
 int inicializar_memoria_mapa();
 
+void enviar_captura_tesoro_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id);
+
+int contar_tesoros_restantes();
+
 /** @brief Procesa la lógica de movimiento y colisiones */
 int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y);
 
@@ -362,7 +366,8 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     {
         if (player_character == RAIDER) {
             // Los raiders pueden recoger tesoros
-            notificar_evento_juego(ST_TREASURE_FOUND, "¡Tesoro encontrado!");
+            notificar_evento_juego(TESORO_CAPTURADO, "¡Tesoro encontrado!");
+            enviar_captura_tesoro_al_servidor(new_x, new_y, key_respuestas_global, mailbox_solicitudes_id_global);
         } else {
             // Los guardianes no pueden moverse sobre tesoros
             return 0;
@@ -372,13 +377,13 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     // Lógica de colisión entre jugadores
     if ((player_character == GUARDIAN && destino == RAIDER)) {
         // Guardián captura a raider
-        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Guardian ha atrapado a un raider!");
+        notificar_evento_juego(RAIDER_CAPTURADO, "¡Guardian ha atrapado a un raider!");
         *jugador_x = new_x;
         *jugador_y = new_y;
         return 1;
     } else if (player_character == RAIDER && destino == GUARDIAN) {
         // Raider es capturado por guardián
-        notificar_evento_juego(ST_PLAYER_CAUGHT, "¡Has sido atrapado!");
+        notificar_evento_juego(RAIDER_CAPTURADO, "¡Has sido atrapado!");
         return 0;
     } else if ((player_character == RAIDER && destino == RAIDER) || 
                (player_character == GUARDIAN && destino == GUARDIAN)) {
@@ -424,8 +429,40 @@ void mostrar_pantalla_victoria_tesoros() {
  * una experiencia de juego fluida.
  */
 void *hilo_refresco(void *arg) {
+    static int pantalla_final_mostrada = 0;
     while (running) {
         dibujar_mapa_coloreado();
+
+        // Mostrar mensaje final si no quedan tesoros
+        if (!pantalla_final_mostrada && contar_tesoros_restantes() == 0) {
+            pantalla_final_mostrada = 1;
+            clear();
+            if (player_character == RAIDER) {
+                attron(COLOR_PAIR(2) | A_BOLD);
+                mvprintw(FILAS / 2, (COLUMNAS - 20) / 2, "¡Has ganado!");
+                attroff(COLOR_PAIR(2) | A_BOLD);
+                attron(COLOR_PAIR(5));
+                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "Pulsa 'q' para salir...");
+                attroff(COLOR_PAIR(5));
+            } else if (player_character == GUARDIAN) {
+                attron(COLOR_PAIR(1) | A_BOLD);
+                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "¡Derrota! Los exploradores ganan.");
+                attroff(COLOR_PAIR(1) | A_BOLD);
+                attron(COLOR_PAIR(5));
+                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "Pulsa 'q' para salir...");
+                attroff(COLOR_PAIR(5));
+            }
+            refresh();
+
+            // Bloquear todas las teclas excepto 'q'
+            int ch;
+            do {
+                ch = getch();
+                usleep(50000);
+            } while (ch != 'q');
+            running = 0;
+        }
+
         usleep(50000); // 50ms para 20 FPS
     }
     return NULL;
@@ -566,6 +603,11 @@ void dibujar_mapa_coloreado()
     attron(COLOR_PAIR(5));
     mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     mvprintw(FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
+
+    // Mostrar contador de tesoros
+    int tesoros = contar_tesoros_restantes();
+    mvprintw(FILAS + 8, 2, "Tesoros restantes: %d", tesoros);
+
     attroff(COLOR_PAIR(5));
     
     refresh();
@@ -738,4 +780,30 @@ void jugar()
 
     // Limpiar recursos y terminar
     terminarPartida();
+}
+
+void enviar_captura_tesoro_al_servidor(int jugador_x, int jugador_y, key_t clave_mailbox_respuestas, int mailbox_solicitudes_id)
+{
+    struct SolicitudServidor solicitud;
+    solicitud.mtype = getpid();
+    solicitud.codigo = TESORO_CAPTURADO; // Debes definir este código en tu protocolo
+    solicitud.clave_mailbox_respuestas = key_respuestas_global;
+    solicitud.fila = jugador_y;
+    solicitud.columna = jugador_x;
+    solicitud.tipo = player_character;
+
+    if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT) == -1) {
+        perror("Error enviando captura de tesoro");
+    }
+}
+
+int contar_tesoros_restantes() {
+    int count = 0;
+    for (int y = 0; y < FILAS; y++) {
+        for (int x = 0; x < COLUMNAS; x++) {
+            if (mapa[y * COLUMNAS + x] == TESORO)
+                count++;
+        }
+    }
+    return count;
 }

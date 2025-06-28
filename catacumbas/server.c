@@ -60,6 +60,8 @@ int main(int argc, char *argv[]) {
             atenderSolicitud(&solicitud, arena);
     }
     // notificarFinalJuego(arena);
+    sleep(5);
+    printf("Enviando mensajes al cliente de finalización...\n");
     finish();
 }
 

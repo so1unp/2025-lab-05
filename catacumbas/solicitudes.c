@@ -296,8 +296,8 @@ int capturarRaider(struct Jugador *jugador, struct Arena *arena) {
 }
 
 void construirRespuesta(struct RespuestaServidor *respuesta,
-     int codigo, const char *mensaje) {
-    snprintf(respuesta->mensaje, MAX_LONGITUD_MENSAJES, mensaje);
+    int codigo, const char *mensaje) {
+    snprintf(respuesta->mensaje, MAX_LONGITUD_MENSAJES, "%s", mensaje);
     respuesta->codigo = codigo;
 }
 
