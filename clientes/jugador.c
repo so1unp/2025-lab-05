@@ -18,7 +18,6 @@
 // INCLUDES DEL PROYECTO
 // ============================================================================
 #include "../catacumbas/catacumbas.h"
-#include "status.h"
 
 // ============================================================================
 // INCLUDES DEL SISTEMA
@@ -36,6 +35,7 @@
 #include <ncurses.h>
 #include <pthread.h>
 #include <signal.h>
+#include "status.h"
 
 // ============================================================================
 // VARIABLES GLOBALES COMPARTIDAS (definidas en main.c)
@@ -110,6 +110,8 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
 /** @brief Muestra la pantalla de victoria por tesoros */
 void mostrar_pantalla_victoria_tesoros();
 
+void notificar_evento_juego(int code, const char *texto);
+
 /** @brief Hilo dedicado al renderizado continuo del mapa */
 void *hilo_refresco(void *arg);
 
@@ -122,14 +124,14 @@ void dibujar_mapa_coloreado();
 /** @brief Termina la partida y limpia todos los recursos */
 void terminarPartida();
 
-/** @brief Notifica eventos del juego al sistema */
-void notificar_evento_juego(int code, const char *texto);
-
 /** @brief Maneja la señal SIGINT (Ctrl+C) */
 void manejar_sigint(int signal);
 
 /** @brief Configura el manejo de señales del sistema */
 void configurar_senales();
+
+/** @brief Muestra la pantalla de derrota */
+void mostrar_pantalla_derrota();
 
 // ============================================================================
 // FUNCIONES DE COMUNICACIÓN CON EL SERVIDOR
@@ -398,6 +400,24 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
 }
 
 /**
+ * @brief Notifica un evento del juego al sistema de estado
+ * @param code Código del evento (tesoro encontrado, jugador capturado, etc.)
+ * @param texto Descripción textual del evento
+ * 
+ * Envía notificaciones de eventos importantes del juego al sistema
+ * de estado para su procesamiento y posible difusión a otros componentes.
+ */
+void notificar_evento_juego(int code, const char *texto) {
+    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
+    struct status_msg msg;
+    msg.mtype = TYPE_GAME_EVENT;
+    msg.code = code;
+    strncpy(msg.text, texto, MAX_MSG-1);
+    msg.text[MAX_MSG-1] = '\0';
+    msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
+}
+
+/**
  * @brief Muestra la pantalla de victoria cuando no quedan tesoros
  * 
  * Presenta una pantalla de victoria para los exploradores cuando
@@ -411,6 +431,26 @@ void mostrar_pantalla_victoria_tesoros() {
     attron(COLOR_PAIR(5));
     mvprintw(FILAS / 2 + 2, (COLUMNAS - 25) / 2, "Presiona cualquier tecla...");
     attroff(COLOR_PAIR(5));
+    refresh();
+    getch();
+}
+
+/**
+ * @brief Muestra la pantalla de derrota
+ * 
+ * Presenta una pantalla de derrota cuando el jugador es capturado
+ * por un guardián.
+ */
+void mostrar_pantalla_derrota() {
+    clear();
+    attron(COLOR_PAIR(1) | A_BOLD);
+    mvprintw(FILAS / 2, (COLUMNAS - 9) / 2, "GAME OVER");
+    attroff(COLOR_PAIR(1) | A_BOLD);
+    attron(COLOR_PAIR(5));
+    mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "¡Has sido capturado por un guardián!");
+    mvprintw(FILAS / 2 + 4, (COLUMNAS - 30) / 2, "Presiona cualquier tecla...");
+    attroff(COLOR_PAIR(5));
+    sleep(5);
     refresh();
     getch();
 }
@@ -516,13 +556,13 @@ void *hilo_entrada(void *arg) {
             enviar_movimiento_al_servidor(jugador_x_global, jugador_y_global, key_respuestas_global, mailbox_solicitudes_id_global);
         }
 
-        // Revisar eventos especiales del servidor
-        struct status_msg evento;
+
+        struct RespuestaServidor evento;
         if (mailbox_respuestas_global != -1) {
-            if (msgrcv(mailbox_respuestas_global, &evento, sizeof(evento) - sizeof(long), TYPE_GAME_EVENT, IPC_NOWAIT) != -1) {
-                if (evento.code == ST_ALL_TREASURES) {
+            if (msgrcv(mailbox_respuestas_global, &evento, sizeof(evento) - sizeof(long), getpid(), IPC_NOWAIT) != -1) {
+                if (evento.codigo == MUERTO) {
                     pthread_mutex_unlock(&pos_mutex);
-                    mostrar_pantalla_victoria_tesoros();
+                    mostrar_pantalla_derrota();
                     fin_partida = 1;
                     running = 0;
                     break;
@@ -645,23 +685,6 @@ void terminarPartida() {
     desconectar_del_servidor();
 }
 
-/**
- * @brief Notifica un evento del juego al sistema de estado
- * @param code Código del evento (tesoro encontrado, jugador capturado, etc.)
- * @param texto Descripción textual del evento
- * 
- * Envía notificaciones de eventos importantes del juego al sistema
- * de estado para su procesamiento y posible difusión a otros componentes.
- */
-void notificar_evento_juego(int code, const char *texto) {
-    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
-    struct status_msg msg;
-    msg.mtype = TYPE_GAME_EVENT;
-    msg.code = code;
-    strncpy(msg.text, texto, MAX_MSG-1);
-    msg.text[MAX_MSG-1] = '\0';
-    msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
-}
 
 // ============================================================================
 // FUNCIONES DE MANEJO DE SEÑALES
