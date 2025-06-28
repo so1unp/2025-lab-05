@@ -71,6 +71,7 @@ directorio/catacumbas_persistidas.dat
 directorio/src/*.o
 directorio-server
 catacumbas_persistidas.dat
+catacumbas-server
 clientes/raider
 clientes/guardian
 ejemplos/ncurses-pong
