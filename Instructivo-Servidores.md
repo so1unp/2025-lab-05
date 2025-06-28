@@ -182,3 +182,52 @@ ipcs
 # Limpiar manualmente (si es necesario)
 ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 ```
+
+# EXTRA - Daemon para ejecutar directorio automáticamente
+
+### 1. Darle permisos de ejecución al script.
+
+   ```bash
+   chmod +x /ruta/a/iniciar-servidores.sh
+   ```
+### 2. Crear un archivo de servicio systemd.
+   
+   ```bash
+   sudo nano /etc/systemd/system/catacumbas-daemon.service
+   ```
+   
+   **Contenido:**
+   
+   ```bash
+   [Unit]
+   Description=Daemon para iniciar servidores de Catacumbas
+   After=network.target
+
+   [Service]
+   Type=simple
+   ExecStart=/ruta/a/sistemas_operativos/2025-lab-05/iniciar-servidores.sh
+   WorkingDirectory=/ruta/a/sistemas_operativos/2025-lab-05
+   Restart=on-failure
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+### 3. Recargar systemd y habilitar el servicio.
+   ```bash
+   sudo systemctl daemon-reexec
+   sudo systemctl daemon-reload
+   sudo systemctl enable catacumbas-daemon.service
+   sudo systemctl start catacumbas-daemon.service
+   ```
+### 4. Verificar que el daemon esté corriendo.
+   ```bash
+   sudo systemctl status catacumbas-daemon.service
+   ```
+
+
+
+
+
+
+
+
