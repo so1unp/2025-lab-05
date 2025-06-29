@@ -513,14 +513,13 @@ void *hilo_refresco(void *arg) {
                 attroff(COLOR_PAIR(5));
             }
             refresh();
-
+                running = 0; // hay q parar el hilo cuando no quedan tesoros
             // Bloquear todas las teclas excepto 'q'
             int ch;
             do {
                 ch = getch();
                 usleep(50000);
-            } while (ch != 'q');
-            running = 0;
+            } while (ch != 'q' && ch != 'Q');
         }
 
         usleep(50000); // 50ms para 20 FPS

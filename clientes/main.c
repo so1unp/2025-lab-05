@@ -212,6 +212,20 @@ void set_game_map(const char *map)
  */
 int buscar_catacumbas_disponibles()
 {
+    // Validar que el usuario haya seleccionado un rol
+    if (strcmp(selected_role, "NO SELECCIONADO") == 0) {
+        clear();
+        mvprintw(5, 10, "Debes seleccionar un rol antes de buscar partidas.");
+        mvprintw(7, 10, "Presiona cualquier tecla para seleccionar un rol...");
+        refresh();
+        getch();
+        ejecutar_seleccion_rol();
+        // Si aún no seleccionó, no continuar
+        if (strcmp(selected_role, "NO SELECCIONADO") == 0) {
+            return 0;
+        }
+    }
+
     // Intentar conectar con el servidor de directorio
     int mailbox_solicitudes = msgget(MAILBOX_KEY, 0666);
     int mailbox_respuestas = msgget(MAILBOX_RESPUESTA_KEY, 0666);
