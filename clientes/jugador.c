@@ -35,10 +35,14 @@
 #include <ncurses.h>
 #include <pthread.h>
 #include <signal.h>
-#include "status.h"
 
 extern void mostrar_game_over();
 extern void mostrar_pantalla_victoria_guardian();
+/** @brief Muestra la pantalla de derrota */
+extern void mostrar_pantalla_derrota();
+
+/** @brief Muestra la pantalla de victoria por tesoros */
+extern void mostrar_pantalla_victoria_tesoros();
 // ============================================================================
 // VARIABLES GLOBALES COMPARTIDAS (definidas en main.c)
 // ============================================================================
@@ -109,11 +113,6 @@ int contar_tesoros_restantes();
 /** @brief Procesa la lógica de movimiento y colisiones */
 int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x, int new_y);
 
-/** @brief Muestra la pantalla de victoria por tesoros */
-void mostrar_pantalla_victoria_tesoros();
-
-void notificar_evento_juego(int code, const char *texto);
-
 /** @brief Hilo dedicado al renderizado continuo del mapa */
 void *hilo_refresco(void *arg);
 
@@ -132,8 +131,7 @@ void manejar_sigint(int signal);
 /** @brief Configura el manejo de señales del sistema */
 void configurar_senales();
 
-/** @brief Muestra la pantalla de derrota */
-void mostrar_pantalla_derrota();
+
 
 
 // ============================================================================
@@ -266,29 +264,7 @@ void enviar_movimiento_al_servidor(int jugador_x, int jugador_y, key_t clave_mai
     if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT) == -1) {
         perror("Error enviando movimiento");
     }
-    
-    // Intentar recibir respuesta inmediata del servidor
-    struct RespuestaServidor respuesta;
-    if (msgrcv(mailbox_respuestas_global, &respuesta, sizeof(respuesta) - sizeof(long), 
-               getpid(), IPC_NOWAIT) != -1) {
-        
-        // Procesar diferentes tipos de respuesta del servidor
-        switch(respuesta.codigo) {
-            case S_OK:
-                mvprintw(FILAS + 5, 0, "Movimiento OK");
-                break;
-            case ERROR:
-                mvprintw(FILAS + 5, 0, "Error: %s", respuesta.mensaje);
-                break;
-            case SIN_TESOROS:
-                mvprintw(FILAS + 5, 0, "Victoria! Todos los tesoros recolectados");
-                break;
-            case SIN_RAIDERS:
-                mvprintw(FILAS + 5, 0, "Victoria! Todos los raiders capturados");
-                break;
-        }
-        refresh();
-    }
+  
 }
 
 // ============================================================================
@@ -418,63 +394,6 @@ int procesar_movimiento(char destino, int *jugador_x, int *jugador_y, int new_x,
     return 1;
 }
 
-/**
- * @brief Notifica un evento del juego al sistema de estado
- * @param code Código del evento (tesoro encontrado, jugador capturado, etc.)
- * @param texto Descripción textual del evento
- * 
- * Envía notificaciones de eventos importantes del juego al sistema
- * de estado para su procesamiento y posible difusión a otros componentes.
- */
-void notificar_evento_juego(int code, const char *texto) {
-    int status_mailbox = msgget(MAILBOX_STATUS_KEY, 0666);
-    struct status_msg msg;
-    msg.mtype = TYPE_GAME_EVENT;    //fijate pa esto no lo usamos
-    msg.code = code;
-    strncpy(msg.text, texto, MAX_MSG-1);
-    msg.text[MAX_MSG-1] = '\0';
-    msgsnd(status_mailbox, &msg, sizeof(msg) - sizeof(long), 0);
-}
-
-/**
- * @brief Muestra la pantalla de victoria cuando no quedan tesoros
- * 
- * Presenta una pantalla de victoria para los exploradores cuando
- * todos los tesoros han sido recolectados del mapa.
- */
-void mostrar_pantalla_victoria_tesoros() {
-    clear();
-    attron(COLOR_PAIR(2) | A_BOLD);
-    mvprintw(FILAS / 2, (COLUMNAS - 35) / 2, "¡No hay más tesoros, los exploradores ganan!");
-    attroff(COLOR_PAIR(2) | A_BOLD);
-    attron(COLOR_PAIR(5));
-    mvprintw(FILAS / 2 + 2, (COLUMNAS - 25) / 2, "Presiona cualquier tecla...");
-    attroff(COLOR_PAIR(5));
-    refresh();
-    getch();
-}
-
-/**
- * @brief Muestra la pantalla de derrota
- * 
- * Presenta una pantalla de derrota cuando el jugador es capturado
- * por un guardián.
- */
-void mostrar_pantalla_derrota() {
-    clear();
-    attron(COLOR_PAIR(1) | A_BOLD);
-    mvprintw(FILAS / 2, (COLUMNAS - 9) / 2, "GAME OVER");
-    attroff(COLOR_PAIR(1) | A_BOLD);
-    attron(COLOR_PAIR(5));
-    mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "¡Has sido capturado por un guardián!");
-    mvprintw(FILAS / 2 + 4, (COLUMNAS - 30) / 2, "Presiona cualquier tecla...");
-    attroff(COLOR_PAIR(5));
-    sleep(5);
-    refresh();
-    getch();
-}
-
-
 // ============================================================================
 // FUNCIONES DE HILOS DE JUEGO
 // ============================================================================
@@ -489,39 +408,9 @@ void mostrar_pantalla_derrota() {
  * una experiencia de juego fluida.
  */
 void *hilo_refresco(void *arg) {
-    static int pantalla_final_mostrada = 0;
+    /* static int pantalla_final_mostrada = 0; */
     while (running) {
         dibujar_mapa_coloreado();
-
-        // Mostrar mensaje final si no quedan tesoros
-        if (!pantalla_final_mostrada && contar_tesoros_restantes() == 0) {
-            pantalla_final_mostrada = 1;
-            clear();
-            if (player_character == RAIDER) {
-                attron(COLOR_PAIR(2) | A_BOLD);
-                mvprintw(FILAS / 2, (COLUMNAS - 20) / 2, "¡Has ganado!");
-                attroff(COLOR_PAIR(2) | A_BOLD);
-                attron(COLOR_PAIR(5));
-                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "Pulsa 'q' para salir...");
-                attroff(COLOR_PAIR(5));
-            } else if (player_character == GUARDIAN) {
-                attron(COLOR_PAIR(1) | A_BOLD);
-                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "¡Derrota! Los exploradores ganan.");
-                attroff(COLOR_PAIR(1) | A_BOLD);
-                attron(COLOR_PAIR(5));
-                mvprintw(FILAS / 2 + 2, (COLUMNAS - 30) / 2, "Pulsa 'q' para salir...");
-                attroff(COLOR_PAIR(5));
-            }
-            refresh();
-                running = 0; // hay q parar el hilo cuando no quedan tesoros
-            // Bloquear todas las teclas excepto 'q'
-            int ch;
-            do {
-                ch = getch();
-                usleep(50000);
-            } while (ch != 'q' && ch != 'Q');
-        }
-
         usleep(50000); // 50ms para 20 FPS
     }
     return NULL;
@@ -540,9 +429,8 @@ void *hilo_refresco(void *arg) {
  */
 void *hilo_entrada(void *arg) {
     int ch;
-    int fin_partida = 0;
     
-    while (running && !fin_partida) {
+    while (running) {
         ch = getch();
         
         // Tecla de salida
@@ -582,8 +470,8 @@ void *hilo_entrada(void *arg) {
                 if (evento.codigo == MUERTO) {
                     running = 0; // Detener el hilo de refresco
                     pthread_mutex_unlock(&pos_mutex);
+                    pthread_join(thread_refresco, NULL); // Espera a que termine el hilo de refresco
                     mostrar_game_over();
-                    fin_partida = 1;
                     break;
                 }                
                 if (evento.codigo == SIN_RAIDERS) {
@@ -593,7 +481,18 @@ void *hilo_entrada(void *arg) {
                     if (player_character == GUARDIAN) {
                         mostrar_pantalla_victoria_guardian();
                     }
-                    fin_partida = 1;
+                    break;
+                }
+                if (evento.codigo == SIN_TESOROS) {
+                    running = 0;
+                    pthread_mutex_unlock(&pos_mutex);
+                    pthread_join(thread_refresco, NULL); // Espera a que termine el hilo de refresco
+                    
+                    if (player_character == RAIDER) {
+                        mostrar_pantalla_victoria_tesoros();
+                    } else if (player_character == GUARDIAN) {
+                        mostrar_pantalla_derrota();
+                    }
                     break;
                 }
             }
@@ -851,15 +750,4 @@ void enviar_captura_tesoro_al_servidor(int jugador_x, int jugador_y, key_t clave
     if (msgsnd(mailbox_solicitudes_id, &solicitud, sizeof(solicitud) - sizeof(long), IPC_NOWAIT) == -1) {
         perror("Error enviando captura de tesoro");
     }
-}
-
-int contar_tesoros_restantes() {
-    int count = 0;
-    for (int y = 0; y < FILAS; y++) {
-        for (int x = 0; x < COLUMNAS; x++) {
-            if (mapa[y * COLUMNAS + x] == TESORO)
-                count++;
-        }
-    }
-    return count;
 }
