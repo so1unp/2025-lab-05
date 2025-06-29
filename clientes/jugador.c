@@ -38,6 +38,7 @@
 #include "status.h"
 
 extern void mostrar_game_over();
+extern void mostrar_pantalla_victoria_guardian();
 // ============================================================================
 // VARIABLES GLOBALES COMPARTIDAS (definidas en main.c)
 // ============================================================================
@@ -133,6 +134,7 @@ void configurar_senales();
 
 /** @brief Muestra la pantalla de derrota */
 void mostrar_pantalla_derrota();
+
 
 // ============================================================================
 // FUNCIONES DE COMUNICACIÓN CON EL SERVIDOR
@@ -472,6 +474,7 @@ void mostrar_pantalla_derrota() {
     getch();
 }
 
+
 // ============================================================================
 // FUNCIONES DE HILOS DE JUEGO
 // ============================================================================
@@ -581,6 +584,16 @@ void *hilo_entrada(void *arg) {
                     running = 0; // Detener el hilo de refresco
                     pthread_mutex_unlock(&pos_mutex);
                     mostrar_game_over();
+                    fin_partida = 1;
+                    break;
+                }                
+                if (evento.codigo == SIN_RAIDERS) {
+                    running = 0;
+                    pthread_mutex_unlock(&pos_mutex);
+                    pthread_join(thread_refresco, NULL); // Espera a que termine el hilo de refresco
+                    if (player_character == GUARDIAN) {
+                        mostrar_pantalla_victoria_guardian();
+                    }
                     fin_partida = 1;
                     break;
                 }
