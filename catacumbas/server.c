@@ -52,17 +52,37 @@ int main(int argc, char *argv[]) {
     // CONFIGURACION
     setup(argv[1], argv[2]);
 
-    // RECIBIR SOLICITUDES DE CLIENTES
-    while ((arena->estado->cant_raiders >= 0)  && arena->estado->cant_tesoros > 0) {
-        printf("Esperando solicitudes...\n");
-        struct SolicitudServidor solicitud;
-        if (recibirSolicitudes(&solicitud, comunicacion->mailbox_solicitudes_id))
-            atenderSolicitud(&solicitud, arena);
+    // PARTIDAS
+    while (1) {
+
+        // RECIBIR SOLICITUDES DE CLIENTES
+        while ((arena->estado->cant_raiders >= 0)  && arena->estado->cant_tesoros > 0) {
+            printf("Esperando solicitudes...\n");
+            struct SolicitudServidor solicitud;
+            if (recibirSolicitudes(&solicitud, comunicacion->mailbox_solicitudes_id))
+                atenderSolicitud(&solicitud, arena);
+        }
+
+        notificarFinalJuego(arena);
+        sleep(1); // cliente necesita un momento antes de desconectarlo
+
+        // TODO: Esto seria una función reiniciarPartida()
+        struct SolicitudServidor dummy;
+        while (msgrcv(comunicacion->mailbox_solicitudes_id, &dummy, sizeof(dummy) - sizeof(long), 0, IPC_NOWAIT) != -1) {
+            printf("🗑️  Mensaje descartado (partida anterior)\n");
+        }
+        cargarArchivoMapa(arena, argv[1]);
+        memset(arena->jugadores, 0, sizeof(arena->jugadores));
+        memset(arena->tesoros, 0, sizeof(arena->tesoros));
+        arena->estado->cant_guardianes = 0;
+        arena->estado->cant_raiders = 0;
+        arena->estado->cant_jugadores = 0;
+        arena->estado->cant_tesoros = 0;
+        generarTesoros(arena);
+
     }
-    // notificarFinalJuego(arena);
-    sleep(5);
-    printf("Enviando mensajes al cliente de finalización...\n");
-    finish();
+
+    return EXIT_SUCCESS;
 }
 
 
