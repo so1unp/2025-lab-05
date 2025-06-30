@@ -79,6 +79,7 @@ catacumbas_persistidas.dat
 catacumbas-server
 clientes/raider
 clientes/guardian
+cliente
 ejemplos/ncurses-pong
 
 # other stuff
