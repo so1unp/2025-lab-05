@@ -15,6 +15,20 @@
 #define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
 
 
+void inicializarEstado(struct Arena *arena) {
+    arena->estado->max_jugadores = arena->max_guardianes + arena->max_raiders;
+    arena->estado->cant_guardianes = 0;
+    arena->estado->cant_raiders = 0;
+    arena->estado->cant_jugadores = 0;
+    arena->estado->cant_tesoros = 0;
+}
+
+void inicializarComunicacion(struct Comunicacion *comunicacion) {
+    snprintf(comunicacion->memoria_mapa_nombre, sizeof(comunicacion->memoria_mapa_nombre), "%s%d", MEMORIA_MAPA_PREFIJO, getpid());
+    snprintf(comunicacion->memoria_estado_nombre, sizeof(comunicacion->memoria_mapa_nombre), "%s%d", MEMORIA_ESTADO_PREFIJO, getpid());
+    comunicacion->mailbox_solicitudes_clave = getpid() * MAILBOX_SOLICITUDES_SUFIJO;      
+}
+
 void abrirMemoria(struct Arena *arena, struct Comunicacion *comunicacion) {
     comunicacion->memoria_mapa_fd =
         shm_open(comunicacion->memoria_mapa_nombre,
