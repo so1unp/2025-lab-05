@@ -6,6 +6,14 @@
 // Funciones de inicializacion
 // ==============================
 
+/// @brief Inicializa los valores de estado del juego.
+/// @param arena Puntero a la arena del juego.
+void inicializarEstado(struct Arena *arena);
+
+/// @brief 
+/// @param comunicacion Puntero a la estructura con los nombres de espacio de memoria compartida y claves mailbox
+void inicializarComunicacion(struct Comunicacion *comunicacion);
+
 /// @brief Abre y mapea la memoria compartida que contiene la arena del juego.
 /// @param arena Puntero a la arena del juego.
 /// @param comunicacion Puntero a la estructura con los nombres de espacio de memoria compartida

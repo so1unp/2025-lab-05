@@ -55,8 +55,8 @@ show_help() {
     echo "  $0 -h              # Muestra esta ayuda"
     echo ""
     echo -e "${GREEN}ARCHIVOS REQUERIDOS:${NC}"
-    echo "  • catacumbas/mapa.txt         - Mapa del juego"
-    echo "  • catacumbas/config.properties - Configuración del servidor"
+    echo "  • mapa.txt         - Mapa del juego"
+    echo "  • config.properties - Configuración del servidor"
     echo ""
     echo -e "${GREEN}FUNCIONAMIENTO:${NC}"
     echo "  • Los servidores se ejecutan en segundo plano"
@@ -155,13 +155,13 @@ if [ ! -f "Makefile" ] || [ ! -d "catacumbas" ] || [ ! -d "directorio" ]; then
 fi
 
 # Verificar que existen los archivos necesarios
-if [ ! -f "catacumbas/mapa.txt" ]; then
-    print_error "Error: No se encontró el archivo catacumbas/mapa.txt"
+if [ ! -f "mapa.txt" ]; then
+    print_error "Error: No se encontró el archivo mapa.txt"
     exit 1
 fi
 
-if [ ! -f "catacumbas/config.properties" ]; then
-    print_error "Error: No se encontró el archivo catacumbas/config.properties"
+if [ ! -f "config.properties" ]; then
+    print_error "Error: No se encontró el archivo config.properties"
     exit 1
 fi
 
@@ -208,7 +208,7 @@ for i in $(seq 1 $CATACUMBAS_COUNT); do
     print_info "  Iniciando servidor de catacumbas #$i..."
     
     # Iniciar el servidor sin redirección de logs
-    ./catacumbas-server ./catacumbas/mapa.txt ./catacumbas/config.properties &
+    ./catacumbas-server ./mapa.txt ./config.properties &
     
     # Guardar el PID en una variable dinámica
     pid=$!

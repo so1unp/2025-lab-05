@@ -3,6 +3,11 @@
 #include "catacumbas.h"  // << Necesario
 #include "../directorio/directorio.h"
 
+/// @brief 
+/// @param comunicacion 
+/// @return 
+int registrarServidor(struct Comunicacion *comunicacion);
+
 /// @brief Envía una solicitud al directorio y espera su respuesta.
 /// @param comunicacion Estructura con los datos de mensajería con el directorio.
 /// @param solicitud Puntero a la solicitud a enviar.

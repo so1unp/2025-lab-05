@@ -16,15 +16,40 @@
 #include "config.h"
 #define _GNU_SOURCE
 
+
+/**
+ * @brief Libera todos los recursos IPC (memoria compartida, buzones) y memoria
+ * dinámica.
+ *
+ * Realiza una limpieza ordenada: desvincula la memoria compartida, desmapea
+ * los segmentos, cierra los descriptores de archivo, elimina el buzón de
+ * mensajes y libera la memoria de la estructura del servidor.
+ *
+ */
 void finish();
+
+/**
+ * @brief Orquesta la secuencia de inicialización completa del servidor.
+ *
+ * Llama en orden a todas las funciones `inicializar*` y `registrarEnDirectorio`
+ * para poner en marcha el servidor. También imprime un banner de inicio.
+ *
+ * @param rutaMapa Ruta al archivo del mapa.
+ * @param rutaConfig Ruta al archivo de configuración.
+ */
 void setup(char rutaMapa[], char rutaConfig[]);
-void usage(char *argv[]);
+
+/// @brief Reiniciar los valores de estado, jugadores y tesoros, y vaciado de la casilla de mensajes de la anterior partida.
+/// @param ruta Ruta al archivo del mapa
+void reiniciarPartida(char *ruta);
 
 // =========================
 //      VARIABLES GLOBALES
 // =========================
 struct Arena *arena;
 struct Comunicacion *comunicacion;
+pthread_t *hilo_jugador;
+pthread_mutex_t lock_arena = PTHREAD_MUTEX_INITIALIZER;
 
 
 // =========================
@@ -52,27 +77,26 @@ int main(int argc, char *argv[]) {
     // CONFIGURACION
     setup(argv[1], argv[2]);
 
-    // RECIBIR SOLICITUDES DE CLIENTES
-    while ((arena->estado->cant_raiders >= 0)  && arena->estado->cant_tesoros > 0) {
-        printf("Esperando solicitudes...\n");
-        struct SolicitudServidor solicitud;
-        if (recibirSolicitudes(&solicitud, comunicacion->mailbox_solicitudes_id))
-            atenderSolicitud(&solicitud, arena);
+    // PARTIDAS
+    while (1) {
+
+        // RECIBIR SOLICITUDES DE CLIENTES
+        while ((arena->estado->cant_raiders >= 0)  && arena->estado->cant_tesoros > 0) {
+            printf("Esperando solicitudes...\n");
+            struct SolicitudServidor solicitud;
+            if (recibirSolicitudes(&solicitud, comunicacion->mailbox_solicitudes_id))
+                atenderSolicitud(&solicitud, arena);
+        }
+
+        notificarFinalJuego(arena);
+        sleep(1); // cliente necesita un momento antes de desconectarlo
+
+        reiniciarPartida(argv[1]);
     }
-    // notificarFinalJuego(arena);
-    finish();
+
+    return EXIT_SUCCESS;
 }
 
-
-/**
- * @brief Libera todos los recursos IPC (memoria compartida, buzones) y memoria
- * dinámica.
- *
- * Realiza una limpieza ordenada: desvincula la memoria compartida, desmapea
- * los segmentos, cierra los descriptores de archivo, elimina el buzón de
- * mensajes y libera la memoria de la estructura del servidor.
- *
- */
 void finish() {
     notificarFinalJuego(arena);
 
@@ -95,15 +119,6 @@ void finish() {
     exit(EXIT_SUCCESS);
 }
 
-/**
- * @brief Orquesta la secuencia de inicialización completa del servidor.
- *
- * Llama en orden a todas las funciones `inicializar*` y `registrarEnDirectorio`
- * para poner en marcha el servidor. También imprime un banner de inicio.
- *
- * @param rutaMapa Ruta al archivo del mapa.
- * @param rutaConfig Ruta al archivo de configuración.
- */
 void setup(char rutaMapa[], char rutaConfig[]) {
     // muy necesario
     arena = malloc(sizeof(struct Arena));
@@ -121,10 +136,9 @@ void setup(char rutaMapa[], char rutaConfig[]) {
     // que haya creado
     signal(SIGINT, finish);
 
-    // Inicializaciones
-    snprintf(comunicacion->memoria_mapa_nombre, sizeof(comunicacion->memoria_mapa_nombre), "%s%d", MEMORIA_MAPA_PREFIJO, getpid());
-    snprintf(comunicacion->memoria_estado_nombre, sizeof(comunicacion->memoria_mapa_nombre), "%s%d", MEMORIA_ESTADO_PREFIJO, getpid());
-    comunicacion->mailbox_solicitudes_clave = getpid() * MAILBOX_SOLICITUDES_SUFIJO;    
+    // Inicializaciones    
+    inicializarComunicacion(comunicacion);
+
     abrirMemoria(arena, comunicacion);
     cargarArchivoConfiguracion(arena, rutaConfig);
     cargarArchivoMapa(arena, rutaMapa);
@@ -148,30 +162,25 @@ void setup(char rutaMapa[], char rutaConfig[]) {
     
     // Generar el estado
     memset(arena->estado, 0, sizeof(struct Estado));
-    arena->estado->max_jugadores = arena->max_guardianes + arena->max_raiders;
-    arena->estado->cant_guardianes = 0;
-    arena->estado->cant_raiders = 0;
-    arena->estado->cant_jugadores = 0;
-    arena->estado->cant_tesoros = 0;
+    inicializarEstado(arena);
+
     generarTesoros(arena);
     // Avisar al proceso directorio
     // Iniciar comunicación con directorio
-    struct solicitud solicitud_directorio;
-    solicitud_directorio.mtype = getpid();
-    solicitud_directorio.tipo = OP_AGREGAR;
-    snprintf(
-        solicitud_directorio.texto,                 
-        sizeof(solicitud_directorio.texto),        
-        "%s|%s|%s|%d",
-        "servidor_generico",
-        comunicacion->memoria_mapa_nombre,
-        comunicacion->memoria_estado_nombre,
-        comunicacion->mailbox_solicitudes_clave
-    );
-    
-    struct respuesta respuesta_directorio;
-    enviarSolicitudDirectorio(comunicacion, &solicitud_directorio, &respuesta_directorio);
-    // MAX CANT CATACUMBAS O DIRECTORIO NO RESPONDE
-    if (respuesta_directorio.codigo == RESP_LIMITE_ALCANZADO || respuesta_directorio.codigo == ERROR) finish();
+    int respuesta = registrarServidor(comunicacion);
+
+    if (respuesta == RESP_LIMITE_ALCANZADO || respuesta == ERROR) finish();
+    // if (respuesta != RESP_OK) finish();
 }
 
+void reiniciarPartida(char *ruta){
+    struct SolicitudServidor dummy;
+    while (msgrcv(comunicacion->mailbox_solicitudes_id, &dummy, sizeof(dummy) - sizeof(long), 0, IPC_NOWAIT) != -1) {
+        printf("🗑️  Mensaje descartado (partida anterior)\n");
+    }
+    cargarArchivoMapa(arena, ruta);
+    memset(arena->jugadores, 0, sizeof(arena->jugadores));
+    memset(arena->tesoros, 0, sizeof(arena->tesoros));
+    inicializarEstado(arena);
+    generarTesoros(arena);
+}

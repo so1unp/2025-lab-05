@@ -13,6 +13,24 @@
 // ===================================
 //      MENSAJERIA CON DIRECTORIO
 // ===================================
+int registrarServidor(struct Comunicacion *comunicacion) {
+    struct solicitud solicitud_directorio;
+    solicitud_directorio.mtype = getpid();
+    solicitud_directorio.tipo = OP_AGREGAR;
+    snprintf(
+        solicitud_directorio.texto,                 
+        sizeof(solicitud_directorio.texto),        
+        "%s|%s|%s|%d",
+        "servidor_generico",
+        comunicacion->memoria_mapa_nombre,
+        comunicacion->memoria_estado_nombre,
+        comunicacion->mailbox_solicitudes_clave
+    );
+
+    struct respuesta respuesta_directorio;
+    enviarSolicitudDirectorio(comunicacion, &solicitud_directorio, &respuesta_directorio);
+    return respuesta_directorio.codigo;
+}
 
 void recibirRespuestaDirectorio(int mailbox_directorio_respuestas_id, struct respuesta *respuesta){
     printf("Recibiendo respuesta de directorio...\n");
