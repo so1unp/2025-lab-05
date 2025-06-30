@@ -725,7 +725,7 @@ void jugar()
         init_pair(9, 122, -1); //Titulo grande de pantalla Victoria
         init_pair(10, 68, -1); //subtitulos de pantalla (Has sido capturado, Se llevaron todo el tesoro,Has ganado!)
         init_pair(11, 94, -1); //texto de informacion de pantalla (Presiona enter para continuar)
-        init_pair(110, 16, 16); //otros? lo puse todo de color negro pa ver
+        init_pair(110, 16, -1); //si un texto aparece en negro es porque no tiene definido ningun color
 
     }
 
