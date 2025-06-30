@@ -1,4 +1,4 @@
-SUBDIRS = catacumbas cliente directorio
+SUBDIRS = catacumbas clientes directorio
 
 # Variables para compilación directa del servidor de directorio
 CC=gcc
@@ -41,7 +41,7 @@ CLIENTES_OBJECTS=$(CLIENTES_SOURCES:.c=.o)
 
 .PHONY: all clean directorio-server catacumbas-server cliente $(SUBDIRS)
 
-all: $(SUBDIRS)
+all: directorio-server catacumbas-server cliente
 
 # Regla para compilar cada subdirectorio (funcionalidad original)
 $(SUBDIRS):
