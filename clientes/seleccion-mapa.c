@@ -96,16 +96,5 @@ int mostrar_seleccion_mapa(Map *maps, int num_maps) {
     }
 
     clear();
-    attron(COLOR_PAIR(COLOR_MENU_TEXTO));
-    mvprintw(2, 5, "Mapa seleccionado: %s", maps[current_selection].name);
-    attroff(COLOR_PAIR(COLOR_MENU_TEXTO));
-
-    attron(COLOR_PAIR(COLOR_MENU_INFORMACION));
-    mvprintw(4, 2, "Presiona cualquier tecla para continuar...");
-    attroff(COLOR_PAIR(COLOR_MENU_INFORMACION));
-
-    refresh();
-    getch();
-
     return current_selection;
 }
