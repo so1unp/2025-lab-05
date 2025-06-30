@@ -513,95 +513,96 @@ void *hilo_entrada(void *arg) {
     return NULL;
 }
 
+WINDOW *ventana_mapa = NULL; // Ventana secundaria para el mapa
 // ============================================================================
 // FUNCIONES DE RENDERIZADO Y VISUALIZACIÓN
 // ============================================================================
 
 /**
- * @brief Renderiza el mapa de juego con colores en la pantalla
- * 
- * Esta función dibuja el estado completo del mapa usando ncurses:
- * - Paredes en color magenta
- * - Tesoros en color amarillo sobre rojo
- * - Espacios vacíos en verde
- * - Jugadores en amarillo brillante
- * - Información de estado y controles
- * 
- * Utiliza diferentes pares de colores definidos para distinguir
- * visualmente los elementos del juego.
+ * @brief Renderiza el mapa de juego con colores en la ventana secundaria.
+ *
+ * Esta función utiliza la ventana secundaria `ventana_mapa` para dibujar el estado
+ * actual del mapa de la catacumba, aplicando diferentes colores a cada tipo de celda:
+ * - Paredes: Gris oscuro
+ * - Espacios vacíos: Gris claro
+ * - Título e información: Verde lima
+ * - Raiders: Verde
+ * - Guardianes: Rojo
+ * - Tesoros: Amarillo claro
+ *
+ * El jugador local se representa con la letra 'J'. El resto de los elementos
+ * se dibujan según el carácter presente en la memoria compartida del mapa.
+ * Al final, se muestra información de controles y la posición actual del jugador.
+ *
+ * El refresco se realiza usando `wnoutrefresh()` y `doupdate()` para evitar parpadeos.
  */
 void dibujar_mapa_coloreado()
 {
-    clear(); // Limpiar pantalla
+    werase(ventana_mapa); // Limpiar solo la ventana
 
     // Título del juego
-    attron(COLOR_PAIR(3));
-    mvprintw(1, 2, "=== MAPA DE CATACUMBAS === ROL: %s", selected_role);
-    attroff(COLOR_PAIR(3));
+    wattron(ventana_mapa, COLOR_PAIR(3));
+    mvwprintw(ventana_mapa, 1, 2, "=== MAPA DE CATACUMBAS === ROL: %s", selected_role);
+    wattroff(ventana_mapa, COLOR_PAIR(3));
 
     // Renderizar cada celda del mapa con su color correspondiente
     for (int y = 0; y < FILAS; y++)
     {
         for (int x = 0; x < COLUMNAS; x++)
         {
-            // Si es la posición del jugador local, mostrar 'J'
-            if (y == jugador_y_global && x == jugador_x_global) {
-                attron(COLOR_PAIR(4) | A_BOLD);
-                mvaddch(y + 4, x + 2, 'J');
-                attroff(COLOR_PAIR(4) | A_BOLD);
-                continue;
-            }
-
             char c = mapa[y * COLUMNAS + x];
 
-            // Aplicar colores según el tipo de celda
-            if (c == PARED)
+            if (y == jugador_y_global && x == jugador_x_global) {
+                wattron(ventana_mapa, COLOR_PAIR(4) | A_BOLD);
+                mvwaddch(ventana_mapa, y + 4, x + 2, 'J');
+                wattroff(ventana_mapa, COLOR_PAIR(4) | A_BOLD);
+            }
+            else if (c == PARED)
             {
-                attron(COLOR_PAIR(1));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(1));
+                wattron(ventana_mapa, COLOR_PAIR(1));
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
+                wattroff(ventana_mapa, COLOR_PAIR(1));
             }
             else if (c == TESORO)
             {
-                attron(COLOR_PAIR(7));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(7));
+                wattron(ventana_mapa, COLOR_PAIR(7));
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
+                wattroff(ventana_mapa, COLOR_PAIR(7));
             }
             else if (c == VACIO)
             {
-                attron(COLOR_PAIR(2));
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(2));
+                wattron(ventana_mapa, COLOR_PAIR(2));
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
+                wattroff(ventana_mapa, COLOR_PAIR(2));
             }
-            else if (c == RAIDER) {
-
-                attron(COLOR_PAIR(5) | A_BOLD);
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(5) | A_BOLD);
-
-            } else if (c == GUARDIAN) {
-
-                attron(COLOR_PAIR(6) | A_BOLD);
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(6) | A_BOLD);
-
+            else if (c == RAIDER)
+            {
+                wattron(ventana_mapa, COLOR_PAIR(5) | A_BOLD);
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
+                wattroff(ventana_mapa, COLOR_PAIR(5) | A_BOLD);
+            }
+            else if (c == GUARDIAN)
+            {
+                wattron(ventana_mapa, COLOR_PAIR(6) | A_BOLD);
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
+                wattroff(ventana_mapa, COLOR_PAIR(6) | A_BOLD);
             }
             else
             {
-                attron(COLOR_PAIR(110) | A_BOLD);
-                mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(110) | A_BOLD);
+                mvwaddch(ventana_mapa, y + 4, x + 2, c);
             }
         }
     }
 
     // Mostrar información de controles y estado
-    attron(COLOR_PAIR(3));
-    mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
-    mvprintw(FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
-    attroff(COLOR_PAIR(3));
+    wattron(ventana_mapa, COLOR_PAIR(3));
+    mvwprintw(ventana_mapa, FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
+    mvwprintw(ventana_mapa, FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
+    wattroff(ventana_mapa, COLOR_PAIR(3));
 
-    refresh();
+    // Refrescar la ventana de forma eficiente
+    wnoutrefresh(ventana_mapa);
+    doupdate();
 }
 
 // ============================================================================
@@ -618,6 +619,11 @@ void dibujar_mapa_coloreado()
  * - Desconecta del servidor
  */
 void terminarPartida() {
+    if (ventana_mapa != NULL) {
+        delwin(ventana_mapa);
+        ventana_mapa = NULL;
+    }
+
     if (recursos_limpiados) return;
     recursos_limpiados = 1;
     endwin();
@@ -741,14 +747,40 @@ void jugar()
     }
 
     // Inicializar variables globales del juego
-    jugador_x_global = 1;
-    jugador_y_global = 1;
+    if (player_character == RAIDER) {
+        jugador_x_global = 1;
+        jugador_y_global = 1;
+        // Si en la posicion inicial hay una pared o tesoro, reaparece al lado
+        if (mapa[jugador_y_global * COLUMNAS + jugador_x_global] != VACIO && mapa[jugador_y_global * COLUMNAS + jugador_x_global] != RAIDER) {
+            for (int x = 1; x < COLUMNAS - 1; x++) {
+                if (mapa[1 * COLUMNAS + x] == VACIO || mapa[1 * COLUMNAS + x] == RAIDER) {
+                    jugador_x_global = x;
+                    break;
+                }
+            }
+        }
+    } else if (player_character == GUARDIAN) {
+        jugador_x_global = COLUMNAS - 2;
+        jugador_y_global = 1;
+        if (mapa[jugador_y_global * COLUMNAS + jugador_x_global] != VACIO && mapa[jugador_y_global * COLUMNAS + jugador_x_global] != GUARDIAN) {
+            for (int x = COLUMNAS - 2; x > 0; x--) {
+                if (mapa[1 * COLUMNAS + x] == VACIO || mapa[1 * COLUMNAS + x] == GUARDIAN) {
+                    jugador_x_global = x;
+                    break;
+                }
+            }
+        }
+    }
     running = 1;
 
     // Configurar ncurses para el juego
     keypad(stdscr, TRUE);  // Habilitar teclas especiales (flechas)
     curs_set(0);           // Ocultar cursor
     timeout(100);          // Timeout para getch()
+
+    // Crear ventana secundaria para el mapa
+    if (ventana_mapa == NULL)
+        ventana_mapa = newwin(FILAS + 10, COLUMNAS + 10, 0, 0);
 
     // Crear hilos para renderizado y entrada
     pthread_create(&thread_refresco, NULL, hilo_refresco, NULL);
