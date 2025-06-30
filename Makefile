@@ -28,11 +28,12 @@ CATACUMBAS_SOURCES=$(CATACUMBAS_DIR)/server.c \
 
 # Archivos fuente del cliente
 CLIENTES_SOURCES=$(CLIENTES_DIR)/main.c \
-				$(CLIENTES_DIR)/seleccion-mapa.c \
-				$(CLIENTES_DIR)/seleccion-rol.c \
-				$(CLIENTES_DIR)/base.c \
-				$(CLIENTES_DIR)/jugador.c \
-				$(CLIENTES_DIR)/gameOver.c 
+                $(CLIENTES_DIR)/seleccion-mapa.c \
+                $(CLIENTES_DIR)/seleccion-rol.c \
+                $(CLIENTES_DIR)/base.c \
+                $(CLIENTES_DIR)/jugador.c \
+                $(CLIENTES_DIR)/gameOver.c \
+                $(CLIENTES_DIR)/colores.c
 
 # Archivos objeto de los servidores
 DIRECTORIO_OBJECTS=$(DIRECTORIO_SOURCES:.c=.o)

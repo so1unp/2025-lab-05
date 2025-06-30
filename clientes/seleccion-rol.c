@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
+#include "colores.h"
 #include "../catacumbas/catacumbas.h"
+
 
 #define MENU_ITEMS 3
 #define MENU_WIDTH 40
@@ -26,15 +28,7 @@ int mostrar_menu_rol()
     int ch;
     int max_y, max_x;
 
-    // Habilitar colores si está disponible
-    if (has_colors())
-    {
-        start_color();
-        init_pair(1, COLOR_BLACK, COLOR_WHITE);  // Seleccionado
-        init_pair(2, COLOR_WHITE, COLOR_BLACK);  // Normal
-        init_pair(3, COLOR_YELLOW, COLOR_BLACK); // Título
-        init_pair(4, COLOR_CYAN, COLOR_BLACK);   // Descripción
-    }
+    inicializar_colores(); 
 
     getmaxyx(stdscr, max_y, max_x);
 
@@ -43,10 +37,10 @@ int mostrar_menu_rol()
         clear();
 
         // Título
-        attron(COLOR_PAIR(3));
-        mvprintw(max_y / 2 - 6, (max_x - strlen("=== SELECCIÓN DE ROL ===")) / 2,
-                 "=== SELECCIÓN DE ROL ===");
-        attroff(COLOR_PAIR(3));
+        attron(COLOR_PAIR(20));
+        mvprintw(max_y / 2 - 6, (max_x - strlen("=== SELECCION DE ROL ===")) / 2,
+                 "=== SELECCION DE ROL ===");
+        attroff(COLOR_PAIR(20));
 
         // Mostrar opciones del menú
         for (int i = 0; i < MENU_ITEMS; i++)
@@ -56,23 +50,23 @@ int mostrar_menu_rol()
 
             if (i == seleccion)
             {
-                attron(COLOR_PAIR(1));
+                attron(COLOR_PAIR(21));
                 mvprintw(y_pos, x_pos, " > %-20s < ", opciones[i].texto);
-                attroff(COLOR_PAIR(1));
+                attroff(COLOR_PAIR(21));
 
                 // Mostrar descripción del item seleccionado
                 if (i < MENU_ITEMS - 1)
-                { // No mostrar descripción para "Salir"
-                    attron(COLOR_PAIR(4));
+                {
+                    attron(COLOR_PAIR(24));
                     mvprintw(y_pos + 1, x_pos + 3, "%-35s", opciones[i].descripcion);
-                    attroff(COLOR_PAIR(4));
+                    attroff(COLOR_PAIR(24));
                 }
             }
             else
             {
-                attron(COLOR_PAIR(2));
+                attron(COLOR_PAIR(22));
                 mvprintw(y_pos, x_pos, "   %-20s   ", opciones[i].texto);
-                attroff(COLOR_PAIR(2));
+                attroff(COLOR_PAIR(22));
             }
         }
 

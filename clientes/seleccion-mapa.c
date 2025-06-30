@@ -1,5 +1,6 @@
 #include <ncurses.h>
 #include <string.h>
+#include "colores.h"
 
 typedef struct {
     char name[64];
@@ -12,9 +13,9 @@ typedef struct {
 static int current_selection = 0;
 
 void draw_static_header_mapa() {
-    attron(COLOR_PAIR(4));
-    mvprintw(1, 2, "=== SELECCIÓN DE MAPA ===");
-    attroff(COLOR_PAIR(4));
+    attron(COLOR_PAIR(20)); 
+    mvprintw(1, 2, "=== SELECCION DE MAPA ===");
+    attroff(COLOR_PAIR(20));
 }
 
 void draw_map_selection(Map *maps, int num_maps) {
@@ -36,13 +37,13 @@ void draw_map_selection(Map *maps, int num_maps) {
 
         // Selección resaltada
         if (i == current_selection) {
-            attron(COLOR_PAIR(2) | A_BOLD | A_REVERSE);
+            attron(COLOR_PAIR(21) | A_BOLD | A_REVERSE); 
             mvprintw(y, 3, " %d. %-20s ", i + 1, maps[i].name);
-            attroff(A_REVERSE | A_BOLD | COLOR_PAIR(2));
+            attroff(A_REVERSE | A_BOLD | COLOR_PAIR(21));
         } else {
-            attron(COLOR_PAIR(3));
+            attron(COLOR_PAIR(22)); // No seleccionado global
             mvprintw(y, 3, " %d. %-20s ", i + 1, maps[i].name);
-            attroff(COLOR_PAIR(3));
+            attroff(COLOR_PAIR(22));
         }
 
         // Info de jugadores y SHM
@@ -60,21 +61,15 @@ void draw_map_selection(Map *maps, int num_maps) {
     }
 
     // Instrucciones
-    attron(COLOR_PAIR(5));
+    attron(COLOR_PAIR(24));
     mvprintw(start_y + num_maps * 3 + 1, 3, "Flechas: mover  |  Enter: seleccionar  |  q: salir");
-    attroff(COLOR_PAIR(5));
+    attroff(COLOR_PAIR(24));
 
     refresh();
 }
 
 int mostrar_seleccion_mapa(Map *maps, int num_maps) {
-    // Colores similares a base.c
-    start_color();
-    init_pair(1, COLOR_MAGENTA, COLOR_BLACK); // Marco y divisores
-    init_pair(2, COLOR_RED, COLOR_YELLOW);    // Selección resaltada
-    init_pair(3, COLOR_BLACK, COLOR_GREEN);   // No seleccionado
-    init_pair(4, COLOR_MAGENTA, COLOR_BLACK); // Header
-    init_pair(5, COLOR_YELLOW, COLOR_BLACK);  // Instrucciones
+    inicializar_colores(); // Usar colores globales
 
     keypad(stdscr, TRUE);
     curs_set(0);
@@ -99,13 +94,13 @@ int mostrar_seleccion_mapa(Map *maps, int num_maps) {
     }
 
     clear();
-    attron(COLOR_PAIR(2));
+    attron(COLOR_PAIR(21));
     mvprintw(2, 5, "Mapa seleccionado: %s", maps[current_selection].name);
-    attroff(COLOR_PAIR(2));
+    attroff(COLOR_PAIR(21));
 
-    attron(COLOR_PAIR(5));
+    attron(COLOR_PAIR(24));
     mvprintw(4, 2, "Presiona cualquier tecla para continuar...");
-    attroff(COLOR_PAIR(5));
+    attroff(COLOR_PAIR(24));
 
     refresh();
     getch();

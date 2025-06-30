@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <signal.h>
+#include "colores.h"
 
 // ============================================================================
 // INCLUDES DEL PROYECTO
@@ -154,6 +155,8 @@ int buscar_catacumbas_disponibles();
 
 /** @brief Muestra el menú principal del sistema */
 int mostrar_menu_principal();
+// muestra un mensaje cuando no se puede conectar con el servidor de directorio
+void mostrar_pantalla_directorio_no_disponible();
 
 // ============================================================================
 // FUNCIONES DE CONFIGURACIÓN DEL JUEGO
@@ -217,26 +220,19 @@ int buscar_catacumbas_disponibles()
 
     if (mailbox_solicitudes == -1 || mailbox_respuestas == -1)
     {
-        printf("Directorio no disponible\n");
-        printf("Asegúrate de que el servidor de directorio esté ejecutándose:\n");
-        printf("cd ../../directorio\n");
-        printf("./server &\n\n");
-        printf("Presiona Enter para regresar al menú principal...");
-        getchar();
+        // printf("Directorio no disponible\n");
+        // printf("Asegúrate de que el servidor de directorio esté ejecutándose:\n");
+        // printf("cd ../../directorio\n");
+        // printf("./server &\n\n");
+        // printf("Presiona Enter para regresar al menú principal...");
+        // getchar();
         initscr();
         cbreak();
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors())
-        {
-            start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-            init_pair(2, COLOR_RED, COLOR_YELLOW);
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-        }
+        mostrar_pantalla_directorio_no_disponible();
+        endwin();
         return 0;
     }
 
@@ -258,15 +254,7 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors())
-        {
-            start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-            init_pair(2, COLOR_RED, COLOR_YELLOW);
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-        }
+        inicializar_colores();
         return 0;
     }
 
@@ -280,15 +268,7 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors())
-        {
-            start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-            init_pair(2, COLOR_RED, COLOR_YELLOW);
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-        }
+        inicializar_colores();
         return 0;
     }
 
@@ -333,15 +313,7 @@ int buscar_catacumbas_disponibles()
             noecho();
             keypad(stdscr, TRUE);
             curs_set(0);
-            if (has_colors())
-            {
-                start_color();
-                init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-                init_pair(2, COLOR_RED, COLOR_YELLOW);
-                init_pair(3, COLOR_BLACK, COLOR_GREEN);
-                init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-                init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-            }
+            inicializar_colores();
             return 0;
         }
 
@@ -367,15 +339,7 @@ int buscar_catacumbas_disponibles()
         noecho();
         keypad(stdscr, TRUE);
         curs_set(0);
-        if (has_colors())
-        {
-            start_color();
-            init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-            init_pair(2, COLOR_RED, COLOR_YELLOW);
-            init_pair(3, COLOR_BLACK, COLOR_GREEN);
-            init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-            init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-        }
+        inicializar_colores();
         return 0;
     }
 }
@@ -455,15 +419,7 @@ void mostrar_catacumbas_formateadas(char *datos)
     noecho();
     keypad(stdscr, TRUE);
     curs_set(0);
-    if (has_colors())
-    {
-        start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-        init_pair(2, COLOR_RED, COLOR_YELLOW);
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-    }
+    inicializar_colores();
 }
 
 // ============================================================================
@@ -508,19 +464,7 @@ int mostrar_menu_principal()
     keypad(stdscr, TRUE);
     curs_set(0);
 
-    if (has_colors())
-    {
-        start_color();
-        use_default_colors();
-        init_pair(20, 63, 89);   // Menu principal - CATACUMBAS
-        init_pair(21, 63, -1);   // Seleccionar opcion
-        init_pair(22, 184, -1);  // opciones del menu
-        init_pair(23, 17, 135); // mensajes de opciones del menu
-        init_pair(24, 82, -1);   // informacion
-        init_pair(25, 53, 60);   // items
-        init_pair(24, 82, -1);   // informacion
-
-    }
+    inicializar_colores();
     // Bucle principal del menú
     while (1)
     {
@@ -549,7 +493,7 @@ int mostrar_menu_principal()
                 mvprintw(y_pos, x_pos, " > %-30s < ", opciones[i].texto);
                 attroff(COLOR_PAIR(23));
 
-                //items
+                // items
                 if (i < MENU_PRINCIPAL_ITEMS - 1)
                 {
                     attron(COLOR_PAIR(25));
@@ -602,15 +546,17 @@ int mostrar_menu_principal()
                     noecho();
                     keypad(stdscr, TRUE);
                     curs_set(0);
-                    if (has_colors())
-                    {
-                        start_color();
-                        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);
-                        init_pair(2, COLOR_RED, COLOR_YELLOW);
-                        init_pair(3, COLOR_BLACK, COLOR_GREEN);
-                        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
-                        init_pair(5, COLOR_YELLOW, COLOR_BLACK);
-                    }
+                    inicializar_colores();
+                }
+
+                if (resultado == 0)
+                {
+                    initscr();
+                    cbreak();
+                    noecho();
+                    keypad(stdscr, TRUE);
+                    curs_set(0);
+                    inicializar_colores();
                 }
             }
             else
@@ -683,7 +629,7 @@ int ejecutar_seleccion_rol()
         setPlayChar(GUARDIAN);
         break;
     default:
-        set_game_role("NO SELECCIONADO");
+        set_game_role("EXPLORADOR");
         setPlayChar(RAIDER);
         break;
     }

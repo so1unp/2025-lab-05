@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <unistd.h>
+#include "colores.h"
 
 volatile int mostrar_mensaje = 1;
 volatile int salir_mensaje = 0;
@@ -17,17 +18,21 @@ volatile int salir_mensaje = 0;
  * @param arg Un arreglo de dos enteros: [max_y, max_x] con el tamaño de la pantalla.
  * @return NULL
  */
-void *hilo_mensaje_parpadeante(void *arg) {
+void *hilo_mensaje_parpadeante(void *arg)
+{
     int max_y = ((int *)arg)[0];
     int max_x = ((int *)arg)[1];
 
     const char *mensaje2 = "Presiona 'q' para volver al menú principal...";
 
-    while (!salir_mensaje) {
+    while (!salir_mensaje)
+    {
         // Mostrar mensaje en celeste
-        if (has_colors()) attron(COLOR_PAIR(11));
+        if (has_colors())
+            attron(COLOR_PAIR(11));
         mvprintw(max_y / 2 + 2, (max_x - strlen(mensaje2)) / 2, "%s", mensaje2);
-        if (has_colors()) attroff(COLOR_PAIR(11));
+        if (has_colors())
+            attroff(COLOR_PAIR(11));
         refresh();
         sleep(1); // 1 segundo visible
 
@@ -40,7 +45,9 @@ void *hilo_mensaje_parpadeante(void *arg) {
     return NULL;
 }
 
-void mostrar_game_over() {
+void mostrar_game_over()
+{
+    inicializar_colores();
     clear();
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -50,13 +57,17 @@ void mostrar_game_over() {
     const char *mensaje2 = "Presiona 'q' para volver al menú principal...";
 
     // Título y mensaje 1
-    if (has_colors()) attron(COLOR_PAIR(8) | A_BOLD);
+    if (has_colors())
+        attron(COLOR_PAIR(8) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
-    if (has_colors()) attroff(COLOR_PAIR(8) | A_BOLD);
+    if (has_colors())
+        attroff(COLOR_PAIR(8) | A_BOLD);
 
-    if (has_colors()) attron(COLOR_PAIR(10));
+    if (has_colors())
+        attron(COLOR_PAIR(10));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
-    if (has_colors()) attroff(COLOR_PAIR(10));
+    if (has_colors())
+        attroff(COLOR_PAIR(10));
 
     refresh();
 
@@ -67,7 +78,8 @@ void mostrar_game_over() {
 
     int ch;
     timeout(-1);
-    do {
+    do
+    {
         ch = getch();
     } while (ch != 'q' && ch != 'Q');
 
@@ -78,7 +90,10 @@ void mostrar_game_over() {
     refresh();
 }
 
-void mostrar_pantalla_victoria_guardian() {
+void mostrar_pantalla_victoria_guardian()
+{
+    inicializar_colores();
+
     clear();
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -88,13 +103,17 @@ void mostrar_pantalla_victoria_guardian() {
     const char *mensaje2 = "Presiona 'q' para volver al menú principal...";
 
     // Título y mensaje 1
-    if (has_colors()) attron(COLOR_PAIR(9) | A_BOLD);
+    if (has_colors())
+        attron(COLOR_PAIR(9) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
-    if (has_colors()) attroff(COLOR_PAIR(9) | A_BOLD);
+    if (has_colors())
+        attroff(COLOR_PAIR(9) | A_BOLD);
 
-    if (has_colors()) attron(COLOR_PAIR(10));
+    if (has_colors())
+        attron(COLOR_PAIR(10));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
-    if (has_colors()) attroff(COLOR_PAIR(10));
+    if (has_colors())
+        attroff(COLOR_PAIR(10));
 
     refresh();
 
@@ -106,7 +125,8 @@ void mostrar_pantalla_victoria_guardian() {
 
     int ch;
     timeout(-1);
-    do {
+    do
+    {
         ch = getch();
     } while (ch != 'q' && ch != 'Q');
 
@@ -117,8 +137,9 @@ void mostrar_pantalla_victoria_guardian() {
     refresh();
 }
 
-
-void mostrar_pantalla_derrota() {
+void mostrar_pantalla_derrota()
+{
+    inicializar_colores();
     clear();
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -128,13 +149,17 @@ void mostrar_pantalla_derrota() {
     const char *mensaje2 = "Presiona 'q' para volver al menú principal...";
 
     // Título y mensaje 1
-    if (has_colors()) attron(COLOR_PAIR(8) | A_BOLD);
+    if (has_colors())
+        attron(COLOR_PAIR(8) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
-    if (has_colors()) attroff(COLOR_PAIR(8) | A_BOLD);
+    if (has_colors())
+        attroff(COLOR_PAIR(8) | A_BOLD);
 
-    if (has_colors()) attron(COLOR_PAIR(10));
+    if (has_colors())
+        attron(COLOR_PAIR(10));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
-    if (has_colors()) attroff(COLOR_PAIR(10));
+    if (has_colors())
+        attroff(COLOR_PAIR(10));
 
     refresh();
 
@@ -146,7 +171,8 @@ void mostrar_pantalla_derrota() {
 
     int ch;
     timeout(-1);
-    do {
+    do
+    {
         ch = getch();
     } while (ch != 'q' && ch != 'Q');
 
@@ -157,7 +183,10 @@ void mostrar_pantalla_derrota() {
     refresh();
 }
 
-void mostrar_pantalla_victoria_tesoros() {
+void mostrar_pantalla_victoria_tesoros()
+{
+    inicializar_colores();
+
     clear();
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -167,13 +196,17 @@ void mostrar_pantalla_victoria_tesoros() {
     const char *mensaje2 = "Presiona 'q' para volver al menú principal...";
 
     // Título y mensaje 1
-    if (has_colors()) attron(COLOR_PAIR(9) | A_BOLD);
+    if (has_colors())
+        attron(COLOR_PAIR(9) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
-    if (has_colors()) attroff(COLOR_PAIR(9) | A_BOLD);
+    if (has_colors())
+        attroff(COLOR_PAIR(9) | A_BOLD);
 
-    if (has_colors()) attron(COLOR_PAIR(10));
+    if (has_colors())
+        attron(COLOR_PAIR(10));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
-    if (has_colors()) attroff(COLOR_PAIR(10));
+    if (has_colors())
+        attroff(COLOR_PAIR(10));
 
     refresh();
 
@@ -185,7 +218,8 @@ void mostrar_pantalla_victoria_tesoros() {
 
     int ch;
     timeout(-1);
-    do {
+    do
+    {
         ch = getch();
     } while (ch != 'q' && ch != 'Q');
 
@@ -194,4 +228,38 @@ void mostrar_pantalla_victoria_tesoros() {
     pthread_join(hilo, NULL);
     mvprintw(max_y / 2 + 2, (max_x - strlen(mensaje2)) / 2, "%*s", (int)strlen(mensaje2), " ");
     refresh();
+}
+
+/**
+ * @brief Muestra una pantalla de error cuando el directorio no está disponible.
+ */
+void mostrar_pantalla_directorio_no_disponible()
+{
+    inicializar_colores();
+
+    clear();
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+
+    const char *titulo = "Directorio no disponible";
+    const char *mensaje1 = "Lo siento mucho, en breve volvemos!";
+    const char *mensaje4 = "Presiona cualquier tecla para regresar al menú principal...";
+
+    if (has_colors())
+        attron(COLOR_PAIR(8) | A_BOLD);
+    mvprintw(max_y / 2 - 3, (max_x - strlen(titulo)) / 2, "%s", titulo);
+    if (has_colors())
+        attroff(COLOR_PAIR(8) | A_BOLD);
+
+    mvprintw(max_y / 2 - 1, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
+
+    if (has_colors())
+        attron(COLOR_PAIR(10));
+    mvprintw(max_y / 2 + 3, (max_x - strlen(mensaje4)) / 2, "%s", mensaje4);
+    if (has_colors())
+        attroff(COLOR_PAIR(10));
+
+    refresh();
+    timeout(-1);
+    getch();
 }

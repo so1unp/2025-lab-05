@@ -35,6 +35,7 @@
 #include <ncurses.h>
 #include <pthread.h>
 #include <signal.h>
+#include "colores.h"
 
 extern void mostrar_game_over();
 extern void mostrar_pantalla_victoria_guardian();
@@ -711,24 +712,7 @@ void configurar_senales() {
  */
 void jugar()
 {
-    if (has_colors()) {
-        start_color();
-        use_default_colors();
-        init_pair(1, 235, 235);//paredes gris oscuro
-        init_pair(2, 8, 8);//fondo/piso gris "claro"
-        init_pair(3, 82, -1);//Titulo del mapa y informacion de estado
-        init_pair(4, 11, 8);//jugador: caracter naranja fondo gris "claro"
-        init_pair(5, 2, 8);//Raider: caracter verde fondo gris "claro"
-        init_pair(6, 160, 8); //Guardian: caracter rojo fondo gris "claro"
-        init_pair(7, 227, 8); //Tesoro: caracter amarillo fondo gris "claro"
-        init_pair(8, 88, -1); //Titulo grande de patanalla Game over
-        init_pair(9, 122, -1); //Titulo grande de pantalla Victoria
-        init_pair(10, 68, -1); //subtitulos de pantalla (Has sido capturado, Se llevaron todo el tesoro,Has ganado!)
-        init_pair(11, 94, -1); //texto de informacion de pantalla (Presiona enter para continuar)
-        init_pair(110, 16, -1); //si un texto aparece en negro es porque no tiene definido ningun color
-
-    }
-
+inicializar_colores();
     // Configurar manejo de señales para terminación limpia
     configurar_senales();
 
