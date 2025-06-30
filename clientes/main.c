@@ -38,7 +38,7 @@
 // ============================================================================
 // CONSTANTES DEL MENU PRINCIPAL
 // ============================================================================
-#define MENU_PRINCIPAL_ITEMS 5
+#define MENU_PRINCIPAL_ITEMS 3
 #define MENU_WIDTH 50
 
 // ============================================================================
@@ -325,6 +325,34 @@ int buscar_catacumbas_disponibles()
             selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
             selected_mailbox = maps[seleccionado].mailbox;
 
+            selected_shm_path[sizeof(selected_shm_path) - 1] = '\0';
+            selected_mailbox = maps[seleccionado].mailbox;
+
+            // Mostrar selección de rol después de elegir catacumba
+            int rol_seleccionado = mostrar_menu_rol();
+            if (rol_seleccionado == -1) {
+                // Usuario canceló la selección de rol
+                return 0;
+            }
+
+            // Configurar el rol seleccionado
+            switch (rol_seleccionado)
+            {
+                case RAIDER:
+                    set_game_role("EXPLORADOR");
+                    setPlayChar(RAIDER);
+                    break;
+                case GUARDIAN:
+                    set_game_role("GUARDIAN");
+                    setPlayChar(GUARDIAN);
+                    break;
+                default:
+                    set_game_role("EXPLORADOR");
+                    setPlayChar(RAIDER);
+                    break;
+            }
+
+            // Ahora iniciar el juego con la catacumba y rol seleccionados
             jugar();
         }
         return 0;
@@ -449,8 +477,6 @@ int mostrar_menu_principal()
     OpcionMenuPrincipal opciones[MENU_PRINCIPAL_ITEMS] = {
         {"Juego (demo)", "Demostración básica del juego con mapa fijo", ejecutar_base},
         {"Buscar Partida", "Conectarse a una catacumba", buscar_catacumbas_disponibles},
-        {"Selección de Rol", "Elegir entre Explorador y Guardián", ejecutar_seleccion_rol},
-        {"Selección de Mapa", "Interfaz para seleccionar mapas disponibles", ejecutar_seleccion_mapa},
         {"Salir", "Cerrar la aplicación", NULL}};
 
     int seleccion = 0;
@@ -471,15 +497,15 @@ int mostrar_menu_principal()
         getmaxyx(stdscr, max_y, max_x);
         clear();
 
-        attron(COLOR_PAIR(20) | A_BOLD);
+        attron(COLOR_PAIR(COLOR_MENU_TITULO) | A_BOLD);
         mvprintw(max_y / 2 - 8, (max_x - strlen("=== MENU PRINCIPAL - CATACUMBAS ===")) / 2,
                  "=== MENU PRINCIPAL - CATACUMBAS ===");
-        attroff(COLOR_PAIR(20) | A_BOLD);
+        attroff(COLOR_PAIR(COLOR_MENU_TITULO) | A_BOLD);
 
-        attron(COLOR_PAIR(21));
+        attron(COLOR_PAIR(COLOR_MENU_TEXTO));
         mvprintw(max_y / 2 - 6, (max_x - strlen("Selecciona una opción")) / 2,
                  "Selecciona una opción");
-        attroff(COLOR_PAIR(21));
+        attroff(COLOR_PAIR(COLOR_MENU_TEXTO));
 
         for (int i = 0; i < MENU_PRINCIPAL_ITEMS; i++)
         {
@@ -488,32 +514,30 @@ int mostrar_menu_principal()
 
             if (i == seleccion)
             {
-                //<>
-                attron(COLOR_PAIR(23));
+                attron(COLOR_PAIR(COLOR_MENU_SELECCIONADO));
                 mvprintw(y_pos, x_pos, " > %-30s < ", opciones[i].texto);
-                attroff(COLOR_PAIR(23));
+                attroff(COLOR_PAIR(COLOR_MENU_SELECCIONADO));
 
-                // items
                 if (i < MENU_PRINCIPAL_ITEMS - 1)
                 {
-                    attron(COLOR_PAIR(25));
+                    attron(COLOR_PAIR(COLOR_MENU_ITEMS));
                     mvprintw(y_pos + 1, x_pos + 3, "%-45s", opciones[i].descripcion);
-                    attroff(COLOR_PAIR(25));
+                    attroff(COLOR_PAIR(COLOR_MENU_ITEMS));
                 }
             }
             else
             {
-                attron(COLOR_PAIR(21));
+                attron(COLOR_PAIR(COLOR_MENU_TEXTO));
                 mvprintw(y_pos, x_pos, "   %-30s   ", opciones[i].texto);
-                attroff(COLOR_PAIR(21));
+                attroff(COLOR_PAIR(COLOR_MENU_TEXTO));
             }
         }
-        attron(COLOR_PAIR(21) | A_BOLD);
+        attron(COLOR_PAIR(COLOR_MENU_TEXTO) | A_BOLD);
         mvprintw(max_y - 2, (max_x - strlen("Presiona 'q' para salir")) / 2,
                  "Presiona 'q' para salir");
         mvprintw(max_y - 4, (max_x - strlen("Usa flechas para navegar, ENTER para seleccionar, ESC para salir")) / 2,
                  "Usa flechas para navegar, ENTER para seleccionar, ESC para salir");
-        attroff(COLOR_PAIR(21) | A_BOLD);
+        attroff(COLOR_PAIR(COLOR_MENU_TEXTO) | A_BOLD);
 
         refresh();
 

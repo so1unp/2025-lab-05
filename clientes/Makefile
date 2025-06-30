@@ -7,7 +7,7 @@ PROGS=main
 
 all: $(PROGS)
 
-main: main.c seleccion-mapa.c seleccion-rol.c base.c jugador.c gameOver.c colores.c
+main: main.c seleccion-rol.c seleccion-mapa.c base.c jugador.c gameOver.c colores.c
 	$(CC) -o $@ $^ $(CFLAGS)
 
 clean:

@@ -542,9 +542,9 @@ void dibujar_mapa_coloreado()
     werase(ventana_mapa); // Limpiar solo la ventana
 
     // Título del juego
-    wattron(ventana_mapa, COLOR_PAIR(3));
+    wattron(ventana_mapa, COLOR_PAIR(COLOR_TITULO_MAPA));
     mvwprintw(ventana_mapa, 1, 2, "=== MAPA DE CATACUMBAS === ROL: %s", selected_role);
-    wattroff(ventana_mapa, COLOR_PAIR(3));
+    wattroff(ventana_mapa, COLOR_PAIR(COLOR_TITULO_MAPA));
 
     // Renderizar cada celda del mapa con su color correspondiente
     for (int y = 0; y < FILAS; y++)
@@ -554,39 +554,39 @@ void dibujar_mapa_coloreado()
             char c = mapa[y * COLUMNAS + x];
 
             if (y == jugador_y_global && x == jugador_x_global) {
-                wattron(ventana_mapa, COLOR_PAIR(4) | A_BOLD);
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_JUGADOR_LOCAL) | A_BOLD);
                 mvwaddch(ventana_mapa, y + 4, x + 2, 'J');
-                wattroff(ventana_mapa, COLOR_PAIR(4) | A_BOLD);
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_JUGADOR_LOCAL) | A_BOLD);
             }
             else if (c == PARED)
             {
-                wattron(ventana_mapa, COLOR_PAIR(1));
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_PARED));
                 mvwaddch(ventana_mapa, y + 4, x + 2, c);
-                wattroff(ventana_mapa, COLOR_PAIR(1));
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_PARED));
             }
             else if (c == TESORO)
             {
-                wattron(ventana_mapa, COLOR_PAIR(7));
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_TESORO));
                 mvwaddch(ventana_mapa, y + 4, x + 2, c);
-                wattroff(ventana_mapa, COLOR_PAIR(7));
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_TESORO));
             }
             else if (c == VACIO)
             {
-                wattron(ventana_mapa, COLOR_PAIR(2));
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_PISO));
                 mvwaddch(ventana_mapa, y + 4, x + 2, c);
-                wattroff(ventana_mapa, COLOR_PAIR(2));
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_PISO));
             }
             else if (c == RAIDER)
             {
-                wattron(ventana_mapa, COLOR_PAIR(5) | A_BOLD);
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_RAIDER) | A_BOLD);
                 mvwaddch(ventana_mapa, y + 4, x + 2, c);
-                wattroff(ventana_mapa, COLOR_PAIR(5) | A_BOLD);
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_RAIDER) | A_BOLD);
             }
             else if (c == GUARDIAN)
             {
-                wattron(ventana_mapa, COLOR_PAIR(6) | A_BOLD);
+                wattron(ventana_mapa, COLOR_PAIR(COLOR_GUARDIAN) | A_BOLD);
                 mvwaddch(ventana_mapa, y + 4, x + 2, c);
-                wattroff(ventana_mapa, COLOR_PAIR(6) | A_BOLD);
+                wattroff(ventana_mapa, COLOR_PAIR(COLOR_GUARDIAN) | A_BOLD);
             }
             else
             {
@@ -596,10 +596,10 @@ void dibujar_mapa_coloreado()
     }
 
     // Mostrar información de controles y estado
-    wattron(ventana_mapa, COLOR_PAIR(3));
+    wattron(ventana_mapa, COLOR_PAIR(COLOR_TITULO_MAPA));
     mvwprintw(ventana_mapa, FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     mvwprintw(ventana_mapa, FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
-    wattroff(ventana_mapa, COLOR_PAIR(3));
+    wattroff(ventana_mapa, COLOR_PAIR(COLOR_TITULO_MAPA));
 
     // Refrescar la ventana de forma eficiente
     wnoutrefresh(ventana_mapa);

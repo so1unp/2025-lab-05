@@ -37,10 +37,10 @@ int mostrar_menu_rol()
         clear();
 
         // Título
-        attron(COLOR_PAIR(20));
+        attron(COLOR_PAIR(COLOR_MENU_TITULO));
         mvprintw(max_y / 2 - 6, (max_x - strlen("=== SELECCION DE ROL ===")) / 2,
                  "=== SELECCION DE ROL ===");
-        attroff(COLOR_PAIR(20));
+        attroff(COLOR_PAIR(COLOR_MENU_TITULO));
 
         // Mostrar opciones del menú
         for (int i = 0; i < MENU_ITEMS; i++)
@@ -50,23 +50,22 @@ int mostrar_menu_rol()
 
             if (i == seleccion)
             {
-                attron(COLOR_PAIR(21));
+                attron(COLOR_PAIR(COLOR_MENU_TEXTO));
                 mvprintw(y_pos, x_pos, " > %-20s < ", opciones[i].texto);
-                attroff(COLOR_PAIR(21));
+                attroff(COLOR_PAIR(COLOR_MENU_TEXTO));
 
-                // Mostrar descripción del item seleccionado
                 if (i < MENU_ITEMS - 1)
                 {
-                    attron(COLOR_PAIR(24));
+                    attron(COLOR_PAIR(COLOR_MENU_INFORMACION));
                     mvprintw(y_pos + 1, x_pos + 3, "%-35s", opciones[i].descripcion);
-                    attroff(COLOR_PAIR(24));
+                    attroff(COLOR_PAIR(COLOR_MENU_INFORMACION));
                 }
             }
             else
             {
-                attron(COLOR_PAIR(22));
+                attron(COLOR_PAIR(COLOR_MENU_OPCIONES));
                 mvprintw(y_pos, x_pos, "   %-20s   ", opciones[i].texto);
-                attroff(COLOR_PAIR(22));
+                attroff(COLOR_PAIR(COLOR_MENU_OPCIONES));
             }
         }
 

@@ -58,16 +58,16 @@ void mostrar_game_over()
 
     // Título y mensaje 1
     if (has_colors())
-        attron(COLOR_PAIR(8) | A_BOLD);
+        attron(COLOR_PAIR(COLOR_GAME_OVER) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
     if (has_colors())
-        attroff(COLOR_PAIR(8) | A_BOLD);
+        attroff(COLOR_PAIR(COLOR_GAME_OVER) | A_BOLD);
 
     if (has_colors())
-        attron(COLOR_PAIR(10));
+        attron(COLOR_PAIR(COLOR_SUBTITULOS));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
     if (has_colors())
-        attroff(COLOR_PAIR(10));
+        attroff(COLOR_PAIR(COLOR_SUBTITULOS));
 
     refresh();
 
@@ -104,16 +104,16 @@ void mostrar_pantalla_victoria_guardian()
 
     // Título y mensaje 1
     if (has_colors())
-        attron(COLOR_PAIR(9) | A_BOLD);
+        attron(COLOR_PAIR(COLOR_VICTORIA) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
     if (has_colors())
-        attroff(COLOR_PAIR(9) | A_BOLD);
+        attroff(COLOR_PAIR(COLOR_VICTORIA) | A_BOLD);
 
     if (has_colors())
-        attron(COLOR_PAIR(10));
+        attron(COLOR_PAIR(COLOR_SUBTITULOS));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
     if (has_colors())
-        attroff(COLOR_PAIR(10));
+        attroff(COLOR_PAIR(COLOR_SUBTITULOS));
 
     refresh();
 
@@ -197,16 +197,16 @@ void mostrar_pantalla_victoria_tesoros()
 
     // Título y mensaje 1
     if (has_colors())
-        attron(COLOR_PAIR(9) | A_BOLD);
+        attron(COLOR_PAIR(COLOR_VICTORIA) | A_BOLD);
     mvprintw(max_y / 2 - 2, (max_x - strlen(titulo)) / 2, "%s", titulo);
     if (has_colors())
-        attroff(COLOR_PAIR(9) | A_BOLD);
+        attroff(COLOR_PAIR(COLOR_VICTORIA) | A_BOLD);
 
     if (has_colors())
-        attron(COLOR_PAIR(10));
+        attron(COLOR_PAIR(COLOR_SUBTITULOS));
     mvprintw(max_y / 2, (max_x - strlen(mensaje1)) / 2, "%s", mensaje1);
     if (has_colors())
-        attroff(COLOR_PAIR(10));
+        attroff(COLOR_PAIR(COLOR_SUBTITULOS));
 
     refresh();
 
