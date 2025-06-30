@@ -7,8 +7,8 @@ Este documento explica cómo usar los scripts de automatización para ejecutar l
 Antes de usar los scripts, asegúrate de tener:
 
 1. **Archivos de configuración:**
-   - `catacumbas/mapa.txt` - Mapa del juego
-   - `catacumbas/config.properties` - Configuración del servidor
+   - `mapa.txt` - Mapa del juego
+   - `config.properties` - Configuración del servidor
 
 2. **Estructura del proyecto:**
    ```
@@ -165,7 +165,7 @@ make -C clientes
 
 ### Error: "No se encontró el archivo mapa.txt"
 - **Causa:** Falta el archivo de configuración del mapa
-- **Solución:** Verifica que existe `catacumbas/mapa.txt`
+- **Solución:** Verifica que existe `mapa.txt`
 
 ### Error: "El servidor no se pudo iniciar"
 - **Causa:** Error de compilación o problema en el código
