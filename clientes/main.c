@@ -352,6 +352,7 @@ int buscar_catacumbas_disponibles()
                     break;
             }
 
+            clear();
             // Ahora iniciar el juego con la catacumba y rol seleccionados
             jugar();
         }
