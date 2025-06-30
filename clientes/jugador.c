@@ -90,6 +90,17 @@ int mailbox_respuestas_global;
 /** @brief Hilos para renderizado y entrada de usuario */
 pthread_t thread_refresco, thread_entrada;
 
+/**
+ * @brief Flag para evitar doble liberación de recursos
+ *
+ * Esta variable se utiliza para asegurarse de que la función terminarPartida()
+ * solo limpie los recursos (memoria compartida, ncurses, mailboxes, etc.)
+ * una sola vez, incluso si es llamada desde varios hilos o por señales.
+ * 
+ * Evita errores como segmentation fault por doble free o doble endwin().
+ */
+int recursos_limpiados = 0;
+
 // ============================================================================
 // DECLARACIONES DE FUNCIONES PRIVADAS
 // ============================================================================
@@ -524,9 +535,9 @@ void dibujar_mapa_coloreado()
     clear(); // Limpiar pantalla
 
     // Título del juego
-    attron(COLOR_PAIR(4));
+    attron(COLOR_PAIR(3));
     mvprintw(1, 2, "=== MAPA DE CATACUMBAS === ROL: %s", selected_role);
-    attroff(COLOR_PAIR(4));
+    attroff(COLOR_PAIR(3));
 
     // Renderizar cada celda del mapa con su color correspondiente
     for (int y = 0; y < FILAS; y++)
@@ -535,9 +546,9 @@ void dibujar_mapa_coloreado()
         {
             // Si es la posición del jugador local, mostrar 'J'
             if (y == jugador_y_global && x == jugador_x_global) {
-                attron(COLOR_PAIR(2) | A_BOLD);
+                attron(COLOR_PAIR(4) | A_BOLD);
                 mvaddch(y + 4, x + 2, 'J');
-                attroff(COLOR_PAIR(2) | A_BOLD);
+                attroff(COLOR_PAIR(4) | A_BOLD);
                 continue;
             }
 
@@ -552,35 +563,43 @@ void dibujar_mapa_coloreado()
             }
             else if (c == TESORO)
             {
+                attron(COLOR_PAIR(7));
+                mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(7));
+            }
+            else if (c == VACIO)
+            {
                 attron(COLOR_PAIR(2));
                 mvaddch(y + 4, x + 2, c);
                 attroff(COLOR_PAIR(2));
             }
-            else if (c == VACIO)
-            {
-                attron(COLOR_PAIR(3));
+            else if (c == RAIDER) {
+
+                attron(COLOR_PAIR(5) | A_BOLD);
                 mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(3));
-            }
-            else if (c == RAIDER || c == GUARDIAN)
-            {
-                // Otros jugadores: mostrar su letra de rol
-                attron(COLOR_PAIR(2) | A_BOLD);
+                attroff(COLOR_PAIR(5) | A_BOLD);
+
+            } else if (c == GUARDIAN) {
+
+                attron(COLOR_PAIR(6) | A_BOLD);
                 mvaddch(y + 4, x + 2, c);
-                attroff(COLOR_PAIR(2) | A_BOLD);
+                attroff(COLOR_PAIR(6) | A_BOLD);
+
             }
             else
             {
+                attron(COLOR_PAIR(110) | A_BOLD);
                 mvaddch(y + 4, x + 2, c);
+                attroff(COLOR_PAIR(110) | A_BOLD);
             }
         }
     }
 
     // Mostrar información de controles y estado
-    attron(COLOR_PAIR(5));
+    attron(COLOR_PAIR(3));
     mvprintw(FILAS + 6, 2, "Controles: flechas = Mover, 'q' = Salir");
     mvprintw(FILAS + 7, 2, "Posición: [%d, %d]", jugador_x_global, jugador_y_global);
-    attroff(COLOR_PAIR(5));
+    attroff(COLOR_PAIR(3));
 
     refresh();
 }
@@ -599,6 +618,8 @@ void dibujar_mapa_coloreado()
  * - Desconecta del servidor
  */
 void terminarPartida() {
+    if (recursos_limpiados) return;
+    recursos_limpiados = 1;
     endwin();
     
     // Liberar memoria compartida del mapa
@@ -616,7 +637,6 @@ void terminarPartida() {
     // Desconectar del servidor
     desconectar_del_servidor();
 }
-
 
 // ============================================================================
 // FUNCIONES DE MANEJO DE SEÑALES
@@ -685,14 +705,22 @@ void configurar_senales() {
  */
 void jugar()
 {
-    // Inicializar colores de ncurses si están disponibles
     if (has_colors()) {
         start_color();
-        init_pair(1, COLOR_MAGENTA, COLOR_MAGENTA);  // Paredes
-        init_pair(2, COLOR_RED, COLOR_YELLOW);       // Tesoros y jugadores
-        init_pair(3, COLOR_BLACK, COLOR_GREEN);      // Espacios vacíos
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);    // Título
-        init_pair(5, COLOR_YELLOW, COLOR_BLACK);     // Información
+        use_default_colors();
+        init_pair(1, 235, 235);//paredes gris oscuro
+        init_pair(2, 8, 8);//fondo/piso gris "claro"
+        init_pair(3, 82, -1);//Titulo del mapa y informacion de estado
+        init_pair(4, 11, 8);//jugador: caracter naranja fondo gris "claro"
+        init_pair(5, 2, 8);//Raider: caracter verde fondo gris "claro"
+        init_pair(6, 160, 8); //Guardian: caracter rojo fondo gris "claro"
+        init_pair(7, 227, 8); //Tesoro: caracter amarillo fondo gris "claro"
+        init_pair(8, 88, -1); //Titulo grande de patanalla Game over
+        init_pair(9, 122, -1); //Titulo grande de pantalla Victoria
+        init_pair(10, 68, -1); //subtitulos de pantalla (Has sido capturado, Se llevaron todo el tesoro,Has ganado!)
+        init_pair(11, 94, -1); //texto de informacion de pantalla (Presiona enter para continuar)
+        init_pair(110, 16, 16); //otros? lo puse todo de color negro pa ver
+
     }
 
     // Configurar manejo de señales para terminación limpia
