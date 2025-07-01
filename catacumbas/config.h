@@ -2,9 +2,9 @@
 #define CONFIG_H
 #include "catacumbas.h"  // << Necesario
 
-// ==============================
-// Funciones de inicializacion
-// ==============================
+// =====================================
+//   FUNCIONES DE INICIALIZACIÓN
+// =====================================
 
 /// @brief Inicializa los valores de estado del juego.
 /// @param arena Puntero a la arena del juego.
@@ -24,6 +24,7 @@ void abrirMemoria(struct Arena *arena, struct Comunicacion *comunicacion);
 void abrirMensajeria(struct Comunicacion *comunicacion);
 
 /// @brief Carga los parametros de configuración del juego desde un archivo.
+/// Si los parámetros exceden los tamaños máximos, serán limitados.
 /// @param arena Puntero a la arena del juego.
 /// @param ruta ruta al archivo de configuracion.
 void cargarArchivoConfiguracion(struct Arena *arena, char ruta[]);
@@ -33,9 +34,9 @@ void cargarArchivoConfiguracion(struct Arena *arena, char ruta[]);
 /// @param ruta ruta al archivo del mapa.
 void cargarArchivoMapa(struct Arena *arena,char ruta[]);
 
-// ==============================
-// Funciones de generacion
-// ==============================
+// =====================================
+//   FUNCIONES DE GENERACIÓN
+// =====================================
 
 /// @brief Genera los tesoros en el mapa de forma pseudo aleatoria
 /// @param arena Puntero a la arena del juego.

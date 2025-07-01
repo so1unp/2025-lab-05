@@ -10,13 +10,14 @@
 #include <sys/mman.h>
 #include <sys/msg.h>
 #include <string.h>
+#include "catacumbas.h"
 
 #define RANDOM_FILAS()(1 + rand() % (FILAS-2));
 #define RANDOM_COLMS()(1 + rand() % (COLUMNAS-2));
 
 
 void inicializarEstado(struct Arena *arena) {
-    arena->estado->max_jugadores = arena->max_guardianes + arena->max_raiders;
+    arena->estado->max_jugadores = arena->max_guardianes + arena->max_exploradores;
     arena->estado->cant_guardianes = 0;
     arena->estado->cant_raiders = 0;
     arena->estado->cant_jugadores = 0;
@@ -66,7 +67,11 @@ void cargarArchivoConfiguracion(struct Arena *arena, char ruta[]) {
 
     char linea[100];
 
-    // FIX acá puede tirar excepción si config.properties está vacio
+    // Inicializar valores por defecto
+    arena->max_guardianes = 5;
+    arena->max_exploradores = 5;
+    arena->max_tesoros = 20;
+
     while (fgets(linea, sizeof(linea), archivo))
     {
         // Buscar la clave y el valor
@@ -82,15 +87,13 @@ void cargarArchivoConfiguracion(struct Arena *arena, char ruta[]) {
         valor[strcspn(valor, "\r\n")] = 0;
 
         // Comparar claves
+        // No permitir que los valores excedan los límites
         if (strcmp(clave, "max_guardianes") == 0)
-            // max_guardianes = atoi(valor);
-            arena->max_guardianes = atoi(valor);
+            arena->max_guardianes = atoi(valor) < MAX_GUARDIANES ? atoi(valor) : MAX_GUARDIANES;
         else if (strcmp(clave, "max_tesoros") == 0)
-            // max_tesoros = atoi(valor);
-            arena->max_tesoros = atoi(valor);
-        else if (strcmp(clave, "max_raiders") == 0)
-            // max_raiders = atoi(valor);
-            arena->max_raiders = atoi(valor);
+            arena->max_tesoros = atoi(valor) < MAX_TESOROS ? atoi(valor) : MAX_TESOROS;
+        else if (strcmp(clave, "max_exploradores") == 0)
+            arena->max_exploradores = atoi(valor) < MAX_EXPLORADORES ? atoi(valor) : MAX_EXPLORADORES;
     }
 
     fclose(archivo);
@@ -114,7 +117,6 @@ void cargarArchivoMapa(struct Arena *arena, char ruta[]) {
             columna = 0;
             fila++;
         }
-        // printf("guardó: %c\n",  mapa[fila][columna-1]);
     }
 
     fclose(archivo);

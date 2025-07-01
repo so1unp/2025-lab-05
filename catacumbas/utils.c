@@ -36,18 +36,6 @@ void imprimirEstado(struct Estado *estado) {
     printf("================================\n\n");
 }
 
-// deprecated
-void imprimirTesoros(struct Tesoro *tesoros, struct Estado *estado) {
-    printf("\n===== Tesoros Posiciones =====\n");
-    int i;
-    for (i = 0; i < estado->cant_tesoros; i++) {
-        printf("tesoro %d con pos [%d, %d]\n",
-            tesoros[i].id,
-            tesoros[i].posicion.fila,
-            tesoros[i].posicion.columna);
-    }
-}
-
 void imprimirTituloSolicitud(long pid, const char *accion) {
     printf("\n═══════════════════════════════════════════════════════════════\n");
     printf("\tJugador (%ld) %s\n", pid, accion);
