@@ -20,8 +20,9 @@ int registrarServidor(struct Comunicacion *comunicacion) {
     snprintf(
         solicitud_directorio.texto,                 
         sizeof(solicitud_directorio.texto),        
-        "%s|%s|%s|%d",
-        "servidor_generico",
+        "%s-%i|%s|%s|%d",
+        "servidor",
+        getpid(),
         comunicacion->memoria_mapa_nombre,
         comunicacion->memoria_estado_nombre,
         comunicacion->mailbox_solicitudes_clave
