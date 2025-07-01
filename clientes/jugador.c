@@ -247,6 +247,7 @@ void desconectar_del_servidor() {
         mailbox_respuestas_global = -1;
     }
     
+    printf("\nDesconectando del servidor...\n");
     mvprintw(FILAS + 4, 0, "Desconectado del servidor");
     refresh();
 }
@@ -713,6 +714,9 @@ void configurar_senales() {
 void jugar()
 {
 inicializar_colores();
+    // Resetear flag de limpieza para permitir nueva partida
+    recursos_limpiados = 0;
+    
     // Configurar manejo de señales para terminación limpia
     configurar_senales();
 
