@@ -17,39 +17,41 @@ Antes de usar los scripts, asegúrate de tener:
    ├── catacumbas/
    ├── directorio/
    ├── clientes/
-   ├── iniciar-servidores.sh
+   ├── so.sh
    └── stop.sh
    ```
 
-## 🚀 Script de Inicialización (`iniciar-servidores.sh`)
+## 🚀 Script de Inicialización (`so.sh`)
 
 ### Paso 1: Dar Permisos de Ejecución
 
 ```bash
-chmod +x ./iniciar-servidores.sh
+chmod +x ./so.sh
 ```
 
 ### Paso 2: Uso del Script
 
 #### Mostrar Ayuda
 ```bash
-./iniciar-servidores.sh -h
+./so.sh -h
 # o
-./iniciar-servidores.sh --help
+./so.sh --help
 ```
 
 #### Iniciar un Servidor (por defecto)
 ```bash
-./iniciar-servidores.sh
+./so.sh
+# o
+./so.sh up
 ```
 - Compila e inicia 1 servidor de directorio
 - Compila e inicia 1 servidor de catacumbas
 
 #### Iniciar Múltiples Servidores de Catacumbas
 ```bash
-./iniciar-servidores.sh -c 3
+./so.sh up 3
 # o
-./iniciar-servidores.sh --count 3
+./so.sh -u 3
 ```
 - Compila e inicia 1 servidor de directorio
 - Compila e inicia 3 servidores de catacumbas
@@ -114,14 +116,14 @@ chmod +x ./stop.sh
 ### Escenario 1: Juego Simple (1 servidor)
 ```bash
 # Dar permisos (solo la primera vez)
-chmod +x ./iniciar-servidores.sh ./stop.sh
+chmod +x ./so.sh ./stop.sh
 
 # Iniciar servidores
-./iniciar-servidores.sh
+./so.sh
 
 # En otra terminal, compilar y ejecutar cliente
-make -C clientes
-./clientes/main
+make cliente
+./cliente
 
 # Cuando termines, detener servidores
 # Opción 1: Ctrl+C en la terminal del script
@@ -132,7 +134,9 @@ make -C clientes
 ### Escenario 2: Servidor Múltiple (3 catacumbas)
 ```bash
 # Iniciar múltiples servidores
-./iniciar-servidores.sh -c 3
+./so.sh up 3
+# o
+./so.sh -u 3
 
 # Los clientes podrán conectarse a cualquiera de las 3 catacumbas
 # El servidor de directorio gestiona la lista de catacumbas disponibles
@@ -145,10 +149,11 @@ make -C clientes
 
 ### Parámetros del Script de Inicialización
 
-| Parámetro         | Descripción                       | Ejemplo                        |
-| ----------------- | --------------------------------- | ------------------------------ |
-| `-h, --help`      | Muestra ayuda detallada           | `./iniciar-servidores.sh -h`   |
-| `-c N, --count N` | Inicia N servidores de catacumbas | `./iniciar-servidores.sh -c 5` |
+| Parámetro    | Descripción                       | Ejemplo        |
+| ------------ | --------------------------------- | -------------- |
+| `-h, --help` | Muestra ayuda detallada           | `./so.sh -h`   |
+| `up [N]`     | Inicia N servidores de catacumbas | `./so.sh up 5` |
+| `-u [N]`     | Alias corto para 'up'             | `./so.sh -u 3` |
 
 ### Límites y Validaciones
 
@@ -188,7 +193,7 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 ### 1. Darle permisos de ejecución al script.
 
    ```bash
-   chmod +x /ruta/a/iniciar-servidores.sh
+   chmod +x /ruta/a/so.sh
    ```
 ### 2. Crear un archivo de servicio systemd.
    
@@ -205,7 +210,7 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 
    [Service]
    Type=simple
-   ExecStart=/ruta/a/sistemas_operativos/2025-lab-05/iniciar-servidores.sh
+   ExecStart=/ruta/a/sistemas_operativos/2025-lab-05/so.sh up
    WorkingDirectory=/ruta/a/sistemas_operativos/2025-lab-05
    Restart=on-failure
 
@@ -223,11 +228,3 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
    ```bash
    sudo systemctl status catacumbas-daemon.service
    ```
-
-
-
-
-
-
-
-

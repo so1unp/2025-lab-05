@@ -5,6 +5,7 @@
 # Variables por defecto
 CATACUMBAS_COUNT=1
 SHOW_HELP=false
+COMMAND=""
 
 # Colores para output
 RED='\033[0;31m'
@@ -42,16 +43,21 @@ show_help() {
     echo "  catacumbas según se especifique."
     echo ""
     echo -e "${GREEN}USO:${NC}"
-    echo "  $0 [OPCIONES]"
+    echo "  $0                 # Inicia los servidores (equivale a 'up')"
+    echo "  $0 up [N]          # Inicia los servidores con N catacumbas (defecto: 1)"
+    echo "  $0 -u [N]          # Alias para 'up'"
+    echo "  $0 -h|--help       # Muestra esta ayuda"
     echo ""
     echo -e "${GREEN}OPCIONES:${NC}"
+    echo -e "  ${YELLOW}up [N]${NC}         Inicia N servidores de catacumbas (por defecto: 1)"
+    echo -e "  ${YELLOW}-u [N]${NC}         Alias corto para 'up'"
     echo -e "  ${YELLOW}-h, --help${NC}     Muestra esta ayuda y sale"
-    echo -e "  ${YELLOW}-c, --count N${NC}  Inicia N servidores de catacumbas (por defecto: 1)"
     echo ""
     echo -e "${GREEN}EJEMPLOS:${NC}"
     echo "  $0                 # Inicia 1 servidor de directorio + 1 de catacumbas"
-    echo "  $0 -c 3            # Inicia 1 servidor de directorio + 3 de catacumbas"
-    echo "  $0 --count 5       # Inicia 1 servidor de directorio + 5 de catacumbas"
+    echo "  $0 up              # Inicia 1 servidor de directorio + 1 de catacumbas"
+    echo "  $0 up 3            # Inicia 1 servidor de directorio + 3 de catacumbas"
+    echo "  $0 -u 5            # Inicia 1 servidor de directorio + 5 de catacumbas"
     echo "  $0 -h              # Muestra esta ayuda"
     echo ""
     echo -e "${GREEN}ARCHIVOS REQUERIDOS:${NC}"
@@ -69,24 +75,38 @@ show_help() {
 
 # Función para parsear argumentos
 parse_arguments() {
+    # Si no hay argumentos, usar 'up' por defecto
+    if [[ $# -eq 0 ]]; then
+        COMMAND="up"
+        return
+    fi
+    
     while [[ $# -gt 0 ]]; do
         case $1 in
             -h|--help)
                 SHOW_HELP=true
                 shift
                 ;;
-            -c|--count)
-                if [[ -n $2 && $2 =~ ^[1-9][0-9]*$ ]]; then
-                    CATACUMBAS_COUNT=$2
-                    shift 2
-                else
-                    print_error "Error: -c/--count requiere un número válido mayor a 0"
-                    echo "Usa '$0 -h' para ver la ayuda"
-                    exit 1
+            up)
+                COMMAND="up"
+                shift
+                # Si hay un número después de 'up', usarlo como count
+                if [[ -n $1 && $1 =~ ^[1-9][0-9]*$ ]]; then
+                    CATACUMBAS_COUNT=$1
+                    shift
+                fi
+                ;;
+            -u)
+                COMMAND="up"
+                shift
+                # Si hay un número después de '-u', usarlo como count
+                if [[ -n $1 && $1 =~ ^[1-9][0-9]*$ ]]; then
+                    CATACUMBAS_COUNT=$1
+                    shift
                 fi
                 ;;
             *)
-                print_error "Opción desconocida: $1"
+                print_error "Comando desconocido: $1"
                 echo "Usa '$0 -h' para ver la ayuda"
                 exit 1
                 ;;
@@ -95,6 +115,12 @@ parse_arguments() {
     
     if [ "$SHOW_HELP" = true ]; then
         show_help
+    fi
+    
+    if [ -z "$COMMAND" ]; then
+        print_error "Error: Se requiere un comando válido"
+        echo "Usa '$0 -h' para ver la ayuda"
+        exit 1
     fi
     
     # Validar límites del sistema (MAX_CATACUMBAS = 10)
@@ -129,6 +155,7 @@ cleanup() {
     print_info "Limpiando recursos del sistema..."
     ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q 2>/dev/null
     ipcs -m | grep $USER | awk '{print $2}' | xargs -r ipcrm -m 2>/dev/null
+    ipcs -s | grep $USER | awk '{print $2}' | xargs -r ipcrm -s 2>/dev/null
     
     print_success "Limpieza completada"
     exit 0
@@ -242,8 +269,8 @@ done
 
 print_info ""
 print_info "Ahora puedes ejecutar los clientes para jugar:"
-print_info "  • Para compilar clientes: make -C clientes"
-print_info "  • Para ejecutar cliente: ./clientes/main"
+print_info "  • Para compilar cliente: make cliente"
+print_info "  • Para ejecutar cliente: ./cliente"
 print_info ""
 print_success "¡Sistema listo! Los servidores están ejecutándose en segundo plano."
 print_warning "Presiona Ctrl+C para detener todos los servidores cuando termines."
