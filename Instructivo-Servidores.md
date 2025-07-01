@@ -190,6 +190,93 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 
 # EXTRA - Daemon para ejecutar directorio automáticamente
 
+## ¿Qué es un Daemon?
+
+Un **daemon** (o servicio) es un proceso que corre en segundo plano, sin necesidad de intervención humana directa (sin consola), y que inicia automáticamente al arrancar el sistema o cuando se necesita.
+
+## ¿Qué es systemd?
+
+**systemd** es un sistema de inicialización y gestión de servicios utilizado en la mayoría de las distribuciones modernas de Linux. Actúa como un gestor de procesos del sistema que controla cómo se inician, detienen y gestionan los servicios, demonios y recursos del sistema durante el arranque y la ejecución normal del sistema operativo.
+
+## Configuración del Daemon
+
+### 1. Verificar la Ubicación del Ejecutable
+
+Asegúrate de que el script esté en el servidor:
+```bash
+/ruta/al/ejecutable
+```
+
+### 2. Crear el Archivo de Unidad systemd
+
+Crear un archivo de servicio en `/etc/systemd/system/[nombre_del_archivo].service`:
+
+```ini
+[Unit]
+Description=Mi daemon personalizado
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'ruta/al/ejecutable & ruta/al/ejecutable_2'
+Restart=always
+User=usuario_del_sistema
+WorkingDirectory=/directorio/donde/se/ejecuta
+StandardOutput=append:/ruta/al/escribir_salida_estandar.log
+StandardError=append:/ruta/al/escribir_salida_errores.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 3. Explicación de los Campos del Archivo .service
+
+#### `[Unit]` - Información General del Servicio
+
+| Campo         | Descripción                                                                             |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `Description` | Breve descripción del servicio. Se ve al hacer `systemctl status` o en los logs         |
+| `After`       | Indica que este servicio debe iniciarse después de que el sistema haya levantado la red |
+
+#### `[Service]` - Configuración de Ejecución
+
+| Campo              | Descripción                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| `ExecStart`        | El comando o ruta para ejecutar el servidor                      |
+| `Restart`          | Indica si el servicio debe reiniciarse automáticamente si se cae |
+| `User`             | Usuario del sistema Linux que ejecuta el servicio                |
+| `WorkingDirectory` | Directorio donde el servicio se ejecuta (Opcional)               |
+| `StandardOutput`   | A dónde se escribe la salida estándar                            |
+| `StandardError`    | A dónde se escribe la salida de errores                          |
+
+#### `[Install]` - Configuración de Arranque
+
+| Campo      | Descripción                                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| `WantedBy` | Define en qué nivel de arranque del sistema se activa automáticamente el servicio |
+
+### 4. Habilitar y Arrancar el Servicio
+
+#### Paso 1: Recargar systemd
+```bash
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+```
+
+#### Paso 2: Habilitar el servicio para arranque automático
+```bash
+sudo systemctl enable [nombre_del_archivo].service
+```
+
+#### Paso 3: Iniciar el servicio
+```bash
+sudo systemctl start [nombre_del_archivo].service
+```
+
+> **Nota:** Esto hace que el servidor se inicie automáticamente cada vez que se encienda el servidor principal, y se reiniciará si falla.
+
+## Instructivo de Uso - Daemon para Ejecutar Servidores de Catacumbas y Directorio
+
 ### 1. Darle permisos de ejecución al script.
 
    ```bash
