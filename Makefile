@@ -28,12 +28,12 @@ CATACUMBAS_SOURCES=$(CATACUMBAS_DIR)/server.c \
 
 # Archivos fuente del cliente
 CLIENTES_SOURCES=$(CLIENTES_DIR)/main.c \
-                $(CLIENTES_DIR)/seleccion-mapa.c \
-                $(CLIENTES_DIR)/seleccion-rol.c \
-                $(CLIENTES_DIR)/base.c \
-                $(CLIENTES_DIR)/jugador.c \
-                $(CLIENTES_DIR)/gameOver.c \
-                $(CLIENTES_DIR)/colores.c
+				$(CLIENTES_DIR)/seleccion-rol.c \
+				$(CLIENTES_DIR)/seleccion-mapa.c \
+				$(CLIENTES_DIR)/base.c \
+				$(CLIENTES_DIR)/jugador.c \
+				$(CLIENTES_DIR)/pantalla-final.c \
+				$(CLIENTES_DIR)/colores.c
 
 # Archivos objeto de los servidores
 DIRECTORIO_OBJECTS=$(DIRECTORIO_SOURCES:.c=.o)
@@ -58,7 +58,7 @@ catacumbas-server: $(CATACUMBAS_OBJECTS)
 
 # Regla especial para compilar el cliente en la raíz
 cliente: $(CLIENTES_OBJECTS)
-	$(CC) -o $(BUILD_DIR)/cliente $^ $(LDFLAGS) -lncurses
+	$(CC) -o $(BUILD_DIR)/cliente $^ -Wall -Werror -g -pthread -lncurses -std=c99 -D_XOPEN_SOURCE=700 -lrt -lc
 
 # Alias: make directorio llama a directorio-server
 directorio: directorio-server
@@ -76,7 +76,7 @@ $(CATACUMBAS_DIR)/%.o: $(CATACUMBAS_DIR)/%.c
 
 # Regla para compilar archivos .c a .o de clientes
 $(CLIENTES_DIR)/%.o: $(CLIENTES_DIR)/%.c
-	$(CC) -c -o $@ $< $(CFLAGS) -lncurses
+	$(CC) -c -o $@ $< $(CFLAGS) -pthread -lrt
 
 clean:
 	rm -f $(BUILD_DIR)/directorio-server

@@ -17,39 +17,41 @@ Antes de usar los scripts, asegúrate de tener:
    ├── catacumbas/
    ├── directorio/
    ├── clientes/
-   ├── iniciar-servidores.sh
+   ├── so.sh
    └── stop.sh
    ```
 
-## 🚀 Script de Inicialización (`iniciar-servidores.sh`)
+## 🚀 Script de Inicialización (`so.sh`)
 
 ### Paso 1: Dar Permisos de Ejecución
 
 ```bash
-chmod +x ./iniciar-servidores.sh
+chmod +x ./so.sh
 ```
 
 ### Paso 2: Uso del Script
 
 #### Mostrar Ayuda
 ```bash
-./iniciar-servidores.sh -h
+./so.sh -h
 # o
-./iniciar-servidores.sh --help
+./so.sh --help
 ```
 
 #### Iniciar un Servidor (por defecto)
 ```bash
-./iniciar-servidores.sh
+./so.sh
+# o
+./so.sh up
 ```
 - Compila e inicia 1 servidor de directorio
 - Compila e inicia 1 servidor de catacumbas
 
 #### Iniciar Múltiples Servidores de Catacumbas
 ```bash
-./iniciar-servidores.sh -c 3
+./so.sh up 3
 # o
-./iniciar-servidores.sh --count 3
+./so.sh -u 3
 ```
 - Compila e inicia 1 servidor de directorio
 - Compila e inicia 3 servidores de catacumbas
@@ -114,14 +116,14 @@ chmod +x ./stop.sh
 ### Escenario 1: Juego Simple (1 servidor)
 ```bash
 # Dar permisos (solo la primera vez)
-chmod +x ./iniciar-servidores.sh ./stop.sh
+chmod +x ./so.sh ./stop.sh
 
 # Iniciar servidores
-./iniciar-servidores.sh
+./so.sh
 
 # En otra terminal, compilar y ejecutar cliente
-make -C clientes
-./clientes/main
+make cliente
+./cliente
 
 # Cuando termines, detener servidores
 # Opción 1: Ctrl+C en la terminal del script
@@ -132,7 +134,9 @@ make -C clientes
 ### Escenario 2: Servidor Múltiple (3 catacumbas)
 ```bash
 # Iniciar múltiples servidores
-./iniciar-servidores.sh -c 3
+./so.sh up 3
+# o
+./so.sh -u 3
 
 # Los clientes podrán conectarse a cualquiera de las 3 catacumbas
 # El servidor de directorio gestiona la lista de catacumbas disponibles
@@ -145,10 +149,11 @@ make -C clientes
 
 ### Parámetros del Script de Inicialización
 
-| Parámetro         | Descripción                       | Ejemplo                        |
-| ----------------- | --------------------------------- | ------------------------------ |
-| `-h, --help`      | Muestra ayuda detallada           | `./iniciar-servidores.sh -h`   |
-| `-c N, --count N` | Inicia N servidores de catacumbas | `./iniciar-servidores.sh -c 5` |
+| Parámetro    | Descripción                       | Ejemplo        |
+| ------------ | --------------------------------- | -------------- |
+| `-h, --help` | Muestra ayuda detallada           | `./so.sh -h`   |
+| `up [N]`     | Inicia N servidores de catacumbas | `./so.sh up 5` |
+| `-u [N]`     | Alias corto para 'up'             | `./so.sh -u 3` |
 
 ### Límites y Validaciones
 
@@ -185,10 +190,97 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 
 # EXTRA - Daemon para ejecutar directorio automáticamente
 
+## ¿Qué es un Daemon?
+
+Un **daemon** (o servicio) es un proceso que corre en segundo plano, sin necesidad de intervención humana directa (sin consola), y que inicia automáticamente al arrancar el sistema o cuando se necesita.
+
+## ¿Qué es systemd?
+
+**systemd** es un sistema de inicialización y gestión de servicios utilizado en la mayoría de las distribuciones modernas de Linux. Actúa como un gestor de procesos del sistema que controla cómo se inician, detienen y gestionan los servicios, demonios y recursos del sistema durante el arranque y la ejecución normal del sistema operativo.
+
+## Configuración del Daemon
+
+### 1. Verificar la Ubicación del Ejecutable
+
+Asegúrate de que el script esté en el servidor:
+```bash
+/ruta/al/ejecutable
+```
+
+### 2. Crear el Archivo de Unidad systemd
+
+Crear un archivo de servicio en `/etc/systemd/system/[nombre_del_archivo].service`:
+
+```ini
+[Unit]
+Description=Mi daemon personalizado
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'ruta/al/ejecutable & ruta/al/ejecutable_2'
+Restart=always
+User=usuario_del_sistema
+WorkingDirectory=/directorio/donde/se/ejecuta
+StandardOutput=append:/ruta/al/escribir_salida_estandar.log
+StandardError=append:/ruta/al/escribir_salida_errores.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 3. Explicación de los Campos del Archivo .service
+
+#### `[Unit]` - Información General del Servicio
+
+| Campo         | Descripción                                                                             |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `Description` | Breve descripción del servicio. Se ve al hacer `systemctl status` o en los logs         |
+| `After`       | Indica que este servicio debe iniciarse después de que el sistema haya levantado la red |
+
+#### `[Service]` - Configuración de Ejecución
+
+| Campo              | Descripción                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| `ExecStart`        | El comando o ruta para ejecutar el servidor                      |
+| `Restart`          | Indica si el servicio debe reiniciarse automáticamente si se cae |
+| `User`             | Usuario del sistema Linux que ejecuta el servicio                |
+| `WorkingDirectory` | Directorio donde el servicio se ejecuta (Opcional)               |
+| `StandardOutput`   | A dónde se escribe la salida estándar                            |
+| `StandardError`    | A dónde se escribe la salida de errores                          |
+
+#### `[Install]` - Configuración de Arranque
+
+| Campo      | Descripción                                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| `WantedBy` | Define en qué nivel de arranque del sistema se activa automáticamente el servicio |
+
+### 4. Habilitar y Arrancar el Servicio
+
+#### Paso 1: Recargar systemd
+```bash
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+```
+
+#### Paso 2: Habilitar el servicio para arranque automático
+```bash
+sudo systemctl enable [nombre_del_archivo].service
+```
+
+#### Paso 3: Iniciar el servicio
+```bash
+sudo systemctl start [nombre_del_archivo].service
+```
+
+> **Nota:** Esto hace que el servidor se inicie automáticamente cada vez que se encienda el servidor principal, y se reiniciará si falla.
+
+## Instructivo de Uso - Daemon para Ejecutar Servidores de Catacumbas y Directorio
+
 ### 1. Darle permisos de ejecución al script.
 
    ```bash
-   chmod +x /ruta/a/iniciar-servidores.sh
+   chmod +x /ruta/a/so.sh
    ```
 ### 2. Crear un archivo de servicio systemd.
    
@@ -205,7 +297,7 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
 
    [Service]
    Type=simple
-   ExecStart=/ruta/a/sistemas_operativos/2025-lab-05/iniciar-servidores.sh
+   ExecStart=/ruta/a/sistemas_operativos/2025-lab-05/so.sh up
    WorkingDirectory=/ruta/a/sistemas_operativos/2025-lab-05
    Restart=on-failure
 
@@ -223,11 +315,3 @@ ipcs -q | grep $USER | awk '{print $2}' | xargs -r ipcrm -q
    ```bash
    sudo systemctl status catacumbas-daemon.service
    ```
-
-
-
-
-
-
-
-
