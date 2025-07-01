@@ -65,31 +65,31 @@ void enviarSolicitudDirectorio(struct Comunicacion *comunicacion, struct solicit
 int aceptarJugador(struct Estado *estado, struct Arena *arena,
                 struct Jugador *jugador) {
     if (estado->cant_jugadores >= MAX_JUGADORES) {
-        printf("[LOG] Rechazado: servidor lleno (%d/%d).\n",
+        printf("Rechazado: servidor lleno (%d/%d).\n",
              estado->cant_jugadores, MAX_JUGADORES);
         return 0;
     }
     switch (jugador->tipo) {
     case RAIDER:
-        if (estado->cant_raiders >= arena->max_raiders) {
-            printf("[LOG] Rechazado: equipo RAIDER lleno (%d/%d).\n",
-                   estado->cant_raiders, arena->max_raiders);
+        if (estado->cant_raiders >= arena->max_exploradores) {
+            printf("Rechazado: equipo RAIDER lleno (%d/%d).\n",
+                   estado->cant_raiders, arena->max_exploradores);
             return 0;
         }
         break;
     case GUARDIAN:
         if (estado->cant_guardianes >= arena->max_guardianes) {
-            printf("[LOG] Rechazado: equipo GUARDIAN lleno (%d/%d).\n",
+            printf("Rechazado: equipo GUARDIAN lleno (%d/%d).\n",
                    estado->cant_guardianes, arena->max_guardianes);
             return 0;
         }
         break;
     default:
-        printf("[LOG] Rechazado: tipo de jugador desconocido '%c'.\n",
+        printf("Rechazado: tipo de jugador desconocido '%c'.\n",
                jugador->tipo);
         return 0;
     }
-    printf("[LOG] Jugador (tipo: %c) puede ser aceptado.\n", jugador->tipo);
+    printf("Jugador (tipo: %c) puede ser aceptado.\n", jugador->tipo);
     return 1;
 }
 
@@ -131,7 +131,7 @@ void spawnearJugador(struct Jugador *jugador, struct Arena *arena) {
     }
     jugador->posicion = (struct Posicion){fila, columna};
     arena->mapa[fila][columna] = jugador->tipo;
-    printf("[LOG] Jugador spawneado en (%d, %d).\n",
+    printf("Jugador spawneado en (%d, %d).\n",
            jugador->posicion.fila, jugador->posicion.columna);
 }
 

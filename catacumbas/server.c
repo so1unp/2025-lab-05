@@ -39,17 +39,20 @@ void finish();
  */
 void setup(char rutaMapa[], char rutaConfig[]);
 
-/// @brief Reiniciar los valores de estado, jugadores y tesoros, y vaciado de la casilla de mensajes de la anterior partida.
-/// @param ruta Ruta al archivo del mapa
+/**
+ * @brief Reiniciar los valores de estado, jugadores y tesoros,
+ * y vacia la casilla de mensajes de la anterior partida.
+ * 
+ * @param rutaMapa Ruta al archivo del mapa.
+ */
 void reiniciarPartida(char *ruta);
 
 // =========================
 //      VARIABLES GLOBALES
 // =========================
+
 struct Arena *arena;
 struct Comunicacion *comunicacion;
-pthread_t *hilo_jugador;
-pthread_mutex_t lock_arena = PTHREAD_MUTEX_INITIALIZER;
 
 
 // =========================
@@ -120,6 +123,8 @@ void finish() {
 }
 
 void setup(char rutaMapa[], char rutaConfig[]) {
+    // El orden es importante aqui
+
     // muy necesario
     arena = malloc(sizeof(struct Arena));
     if (arena == NULL) fatal("Fallo malloc de arena");
@@ -127,8 +132,6 @@ void setup(char rutaMapa[], char rutaConfig[]) {
     comunicacion = malloc(sizeof(struct Comunicacion));
     if (comunicacion == NULL) fatal("Fallo malloc de comunicacion");
    
-    // El orden es importante aqui
-    // primero definir los sizes de la arena
     arena->size_mapa = sizeof(char) * FILAS * COLUMNAS;
     arena->size_estado = sizeof(struct Estado);
 
@@ -152,7 +155,7 @@ void setup(char rutaMapa[], char rutaConfig[]) {
     printf("- El mapa se cargó del archivo %s\n", rutaMapa);
     printf("- Las configuraciones se cargaron del archivo: %s\n", rutaConfig);
     printf("  - Cantidad máxima de guardianes: %i\n", arena->max_guardianes);
-    printf("  - Cantidad máxima de raiders: %i\n", arena->max_raiders);
+    printf("  - Cantidad máxima de exploradores: %i\n", arena->max_exploradores);
     printf("  - Cantidad máxima de tesoros: %i\n", arena->max_tesoros);
     printf("\n");
     printf("═══════════════════════════════════════════════════════════════\n\n");
@@ -165,22 +168,32 @@ void setup(char rutaMapa[], char rutaConfig[]) {
     inicializarEstado(arena);
 
     generarTesoros(arena);
-    // Avisar al proceso directorio
+
     // Iniciar comunicación con directorio
     int respuesta = registrarServidor(comunicacion);
 
     if (respuesta == RESP_LIMITE_ALCANZADO || respuesta == ERROR) finish();
-    // if (respuesta != RESP_OK) finish();
 }
 
 void reiniciarPartida(char *ruta){
+
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("           SERVIDOR DE CATACUMBA REINICIANDO...                \n");
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("Descartando mensajes de la partida anterior...\n\n");
     struct SolicitudServidor dummy;
     while (msgrcv(comunicacion->mailbox_solicitudes_id, &dummy, sizeof(dummy) - sizeof(long), 0, IPC_NOWAIT) != -1) {
-        printf("🗑️  Mensaje descartado (partida anterior)\n");
+        printf("🗑️  Mensaje descartado\n");
     }
     cargarArchivoMapa(arena, ruta);
     memset(arena->jugadores, 0, sizeof(arena->jugadores));
     memset(arena->tesoros, 0, sizeof(arena->tesoros));
     inicializarEstado(arena);
     generarTesoros(arena);
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("           SERVIDOR DE CATACUMBA REINICIADO 🍤                 \n");
+    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("Nueva partida iniciada\n");
+    imprimirEstado(arena->estado);
+
 }
