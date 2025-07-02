@@ -57,6 +57,8 @@ dkms.conf
 
 # HTML, PDF
 *.pdf
+# Excepción para documentación
+!clientes/Documentacion_Clientes.pdf
 *.htm
 *.html
 
